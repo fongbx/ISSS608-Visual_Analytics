@@ -1,0 +1,236 @@
+---
+title: "In-class Exercise 01"
+author: "Fong Bao Xian"
+---
+
+# Getting Started
+
+## Install and Launch R Packages
+
+```{r}
+pacman::p_load(tidyverse)
+```
+
+## Import Data
+
+```{r}
+exam_data <- read_csv('data/Exam_data.csv')
+```
+
+We will now examine the data further.
+
+```{r}
+head(exam_data)
+```
+
+```{r}
+str(exam_data)
+```
+
+The variables `CLASS`, `GENDER` and `RACE` are currently character data format. We will change them to factor.
+
+```{r}
+exam_data$CLASS <- as.factor(exam_data$CLASS)
+exam_data$GENDER <- as.factor(exam_data$GENDER)
+exam_data$RACE <- as.factor(exam_data$RACE)
+```
+
+# Plotting Exercises
+
+## Exercise 1
+
+::: panel-tabset
+## Original Design
+
+We can beautify the chart by adjusting the theme.
+
+```{r}
+ggplot(data=exam_data, aes(x=RACE)) +
+  geom_bar()
+```
+
+## Improved Design
+
+Below is an example of how we can adjust the theme of the chart. Here, we will change the colours of plot panel background to light blue and the colour of grid lines to white.
+
+For more information on adjusting the theme, refer [here](https://ggplot2-book.org/polishing.html).
+
+```{r}
+ggplot(data=exam_data, aes(x=RACE)) +
+  geom_bar() +
+  coord_flip() +
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill='lightblue', colour='lightblue',
+                                    size=0.5, linetype='solid'),
+    panel.grid.major = element_line(size=0.5, linetype='solid', colour='white'),
+    panel.grid.minor = element_line(size=0.5, linetype='solid', colour='white'))
+```
+:::
+
+## Exercise 2
+
+::: panel-tabset
+## Original Design
+
+In the original chart, there are the following issues:
+
+-   y-axis label is not clear (i.e., count)
+-   To support effective comparison, the bars should be sorted by their respective frequency
+-   For static graph, frequency values should be added to provide additional information
+
+```{r}
+ggplot(data=exam_data, aes(x=RACE)) +
+  geom_bar()
+```
+
+## Improved Design
+
+Below is the makeover of the chart. There are a few ways to plot the same chart.
+
+**Alternative 1 - Processing before plotting**
+
+-   We need to include `stat='identity'`, which is basically telling ggplot2 you will provide the y-values for the barplot, rather than counting the aggregate number of rows for each x value, which is the default `stat=count`
+
+```{r}
+exam_data %>%
+  group_by(RACE) %>% 
+  summarise(count=n()) %>% 
+  mutate(pct = round((count/sum(count))*100,1)) %>% # we can also use prop.table(count) to get pct
+  # if we do an arrange(desc(count)) before ggplot, there is no need for reorder below
+  ggplot(aes(x=reorder(RACE, desc(count)), y=count)) +
+    geom_bar(stat='identity') +
+    ylim(0,220) +
+    labs(x='Race', y='No. of\nPupils') +
+    geom_text(aes(label=paste0(count, ', ', pct, '%'), vjust = -0.5)) +
+    theme(axis.title.y=element_text(angle=0))
+```
+
+**Alternative 2 - Processing during plotting**
+
+```{r}
+ggplot(data=exam_data,
+       aes(x=reorder(RACE,RACE, function(x) -length(x)))) + # if ascending order remove minus
+  geom_bar() +
+  ylim(0,220) +
+  labs(x='Race', y='No. of\nPupils') +
+  geom_text(stat='count',
+            aes(label=paste0(after_stat(count), ', ',
+                             round(after_stat(count)/
+                                     sum(after_stat(count))*100, 1), '%')),
+            vjust=-0.5) +
+  theme(axis.title.y=element_text(angle=0))
+```
+
+**Alternative 3 - Using forcats package**
+
+```{r}
+library(forcats)
+
+ggplot(data=exam_data,
+       # for ascending order use fct_rev(fct_infreq(RACE))
+       aes(x = fct_infreq(RACE))) + 
+  geom_bar() +
+  ylim(0,220) +
+  labs(x='Race', y='No. of\nPupils') +
+  geom_text(stat='count',
+            aes(label=paste0(after_stat(count), ', ',
+                             round(after_stat(count)/
+                                     sum(after_stat(count))*100, 1), '%')),
+            vjust=-0.5) +
+  theme(axis.title.y=element_text(angle=0))
+```
+:::
+
+## Exercise 3
+
+::: panel-tabset
+## Original Design
+
+```{r}
+ggplot(data=exam_data,
+       aes(x=MATHS)) +
+  geom_histogram(bins=20)
+```
+
+## Improved Design
+
+We will improve the design with the following:
+
+-   Adding mean and median lines on the histogram plot
+-   Change fill colour and line colour
+
+```{r}
+ggplot(data=exam_data,
+       aes(x=MATHS)) +
+  geom_histogram(bins=20, color='black', fill='lightblue') +
+  geom_vline(xintercept=mean(exam_data$MATHS, na.rm=T),
+             color='red', linetype='dashed', size=1) +
+  geom_vline(xintercept=median(exam_data$MATHS, na.rm=T),
+             color='blue', linetype='dashed', size=1)
+```
+:::
+
+## Exercise 4
+
+::: panel-tabset
+## Original Design
+
+The below histograms are not informative. This is because they only reveal the distribution of English scores by gender but without context such as all pupils.
+
+```{r}
+ggplot(data=exam_data,
+       aes(x=ENGLISH)) +
+  geom_histogram() +
+  facet_wrap(~ GENDER)
+```
+
+## Improved Design
+
+We will create a makeover as shown below. The background histograms show the distribution of English scores of all pupils.
+
+```{r}
+exam_data_wo_gender <- exam_data[,-3] # remove column 3
+
+ggplot(data=exam_data,
+       aes(x=ENGLISH, fill=GENDER)) +
+  # first hist plots the background, second hist plots the foreground
+  geom_histogram(data=exam_data_wo_gender, fill='grey', alpha=0.5) +
+  geom_histogram(colour='black') +
+  facet_grid(~ GENDER) +
+  guides(fill=FALSE) + # removes the legend
+  theme_bw()
+```
+:::
+
+## Exercise 5
+
+::: panel-tabset
+## Original Design
+
+The original chart shows minimal information.
+
+```{r}
+ggplot(data=exam_data, aes(x=MATHS, y=ENGLISH)) +
+  geom_point()
+```
+
+## Improved Design
+
+We will improve the design with the following:
+
+-   Changing to equal axis
+-   Including guides to inform where the passing grades are
+
+```{r}
+ggplot(data=exam_data,
+       aes(x=MATHS, y=ENGLISH)) +
+  geom_point() +
+  coord_cartesian(xlim=c(0,100), ylim=c(0,100)) +
+  geom_vline(xintercept=50, linetype='dashed', colour='grey60',
+             size=1.5, alpha=0.8) +
+  geom_hline(yintercept=50, linetype='dashed', colour='grey60',
+             size=1.5, alpha=0.8) +
+  theme(aspect.ratio=1) # enables plot to be square-shaped
+```
+:::

@@ -1,0 +1,55 @@
+---
+title: "In-class Exercise 4"
+author: "Fong Bao Xian"
+date: "6 May 2023"
+---
+
+# Getting Started
+
+## Import and Launch R packages
+
+-   [rstatix](https://rpkgs.datanovia.com/rstatix/) - Provides a simple framework, coherent with the 'tidyverse' design philosophy, for performing basic statistical tests, including t-test, Wilcoxon test, ANOVA, Kruskal-Wallis and correlation analyses. The output of each test is automatically transformed into a tidy data frame to facilitate visualization (tibble format).
+
+```{r}
+pacman::p_load(rstatix, gt, patchwork, tidyverse, webshot2, png)
+```
+
+## Import data
+
+```{r}
+exam_data <- read_csv("data/Exam_data.csv")
+```
+
+# Visualising Normal Distribution
+
+We will use the Q-Q plot, short for "quantile-quantile" plot, to examine whether the data is normally distributed. If the data is normally distributed, the points in a Q-Q plot will lie on a straight diagonal line. Conversely, if the points deviate significantly from the straight diagonal line, then it's less likely that the data is normally distributed.
+
+```{r}
+ggplot(data = exam_data,
+       aes(sample=ENGLISH)) +
+  stat_qq() +
+  stat_qq_line()
+```
+
+::: callout-note
+We can see that the points deviate significantly from the straight diagonal line. This is a clear indication that the set of data is not normally distributed.
+:::
+
+# Combining Statistical Graph and Analysis Table
+
+```{r}
+qq <- ggplot(data = exam_data,
+       aes(sample=ENGLISH)) +
+  stat_qq() +
+  stat_qq_line()
+
+sw_t <- exam_data %>% 
+  shapiro_test(ENGLISH) %>% 
+  gt()
+
+tmp <- tempfile(fileext = ".png")
+gtsave(sw_t, tmp)
+table_png <- png::readPNG(tmp, native = TRUE)
+
+qq + table_png
+```

@@ -1,0 +1,36 @@
+---
+title: "In-class Exercise 5"
+author: "Fong Bao Xian"
+---
+
+# Getting Started
+
+## Install and Launch R packages
+
+```{r}
+pacman::p_load(jsonlite, tidygraph, ggraph, visNetwork, tidyverse)
+```
+
+## Import data
+
+```{r}
+mc1 <- fromJSON("data/MC1.json")
+```
+
+```{r}
+mc1$links
+```
+
+```{r}
+mc1_node <- as_tibble(mc1$nodes) %>% 
+  select(id, type, country)
+
+mc1_node
+```
+
+```{r}
+mc1_edges <- as_tibble(mc1$links) %>% 
+  select(source, target, type, weight, key)
+
+mc1_edges
+```
