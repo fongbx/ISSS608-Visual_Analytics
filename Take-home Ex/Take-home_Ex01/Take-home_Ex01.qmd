@@ -417,7 +417,7 @@ ggplot(data = combined, aes(x = Wage)) +
 In the City of Engagement, the Lorenz curve deviates slightly from the straight diagonal line and the Gini Coefficient is 0.27. As a guideline, a Gini Coefficient value between 0.2 - 0.3 represents relative equality. This shows that overall, there did not seem to be an issue of big income gap. It might however still be worth looking into whether income differs by any particulars groups of demographic profiles.
 :::
 
-## Distribution of Income and Expense Categories among different Demographic Profiles
+## Distribution of Income and Expense Categories by different Demographic Profiles
 
 We now want to drill in further to understand how income and the different expense categories differ by the different demographic profiles. For such exploration, we will use an interactive chart created with `plot_ly()` from the **plotly** package.
 
@@ -720,12 +720,12 @@ ggplot(wage_col_overtime, aes(x = Amount, y = yearmonth, fill = Category)) +
 -   The distribution of wage is more widely spread out compared to the distribution of cost of living, meaning there is greater divergence in income compared to spending in the population.
 :::
 
-## Joviality among different Demographic Profiles
+## Joviality by different Demographic Profiles
 
-Last but not least, we want to understand what factors are correlated with the residents' happiness level. We will first use an interactive chart to explore how joviality differs by the different demographic profiles.
+Next, we want to understand what factors are correlated with the residents' happiness level. We will first use an interactive chart to explore how joviality differs by the different demographic profiles.
 
 ::: callout-tip
-## Interactive Plot
+## Interactive Chart
 
 -   Select from the dropdown menus to change the variable on the x-axis
 -   Hover over the charts to view the key statistics
@@ -944,8 +944,112 @@ ggbetweenstats(
 The p-value from the Kruskal-Wallis one-way ANOVA test is higher than our level of significance of 0.05, hence we do not reject the null hypothesis. There is insufficient evidence to show that joviality differs by interest group.
 :::
 
-# Additional References
+## Joviality by Income/Expenses
+
+Last but not least, we want to find out whether joviality is correlated with a resident's income or expenses (spending). We will use an interactive chart to explore the potential patterns.
+
+::: callout-tip
+## Interactive Chart
+
+-   Select from the dropdown menus to change the variable on the x-axis
+-   Hover over the charts to view details of the data points
+:::
+
+```{r}
+#| code-fold: true
+#| code-summary: "Show code"
+#| fig-width: 12
+#| fig-height: 10
+
+# Initislise the base plot
+plot_ly(data = combined,
+        x = ~Wage,
+        y = ~joviality,
+        type = 'scatter',
+        mode = "markers",
+        marker = list(size = 4, color = "#456455")) |> 
+
+# Generate plot, x-axis, and y-axis title
+  layout(title = "Scatterplot of Joviality vs Income/Expenses",
+         xaxis = list(title = "Income"),
+         yaxis = list(title = "Joviality"),
+         
+  theme(plot.title = element_text(hjust = 0.5, size = 18)),
+         
+# Create dropwdown menus to allow selection of parameters on x-axis 
+         updatemenus = list(list(type = "dropdown",
+                                 direction = "up",
+                                 xanchor = "left",
+                                 yanchor = "top",
+                                 x = 1,
+                                 y = 0,
+                                 buttons = list(
+                                   list(method = "update",
+                                        args = list(list(x = list(combined$Wage)),
+                                                    list(xaxis = list(title = "Income"))),
+                                        label = "Income"),
+                                   list(method = "update",
+                                        args = list(list(x = list(combined$Food)),
+                                                    list(xaxis = list(title = "Food"))),
+                                        label = "Food"),
+                                   list(method = "update",
+                                        args = list(list(x = list(combined$Recreation)),
+                                                    list(xaxis = list(title = "Recreation"))),
+                                        label = "Recreation"),
+                                   list(method = "update",
+                                        args = list(list(x = list(combined$Education)),
+                                                    list(xaxis = list(title = "Education"))),
+                                        label = "Education"),
+                                   list(method = "update",
+                                        args = list(list(x = list(combined$AdjustedShelter)),
+                                                    list(xaxis = list(title = "Shelter"))),
+                                        label = "Shelter")
+                                   )
+                                 )
+                                )
+          )
+```
+
+::: callout-note
+## Key Observations
+
+-   Income does not seem to have a linear relationship with joviality.
+-   Among all the categories of expenses, spendings on recreation seem to have a positive linear relationship with joviality.
+:::
+
+### Statistical Test: Does Recreation Spending linearly correlate with Joviality
+
+We will confirm our hypothesis of whether recreation spending is linearly correlated with joviality by testing the following hypothesis using the Pearson's correlation test:
+
+> H0: Population correlation coefficient between recreation and joviality is equal to 0\
+> H1: Population correlation coefficient between recreation and joviality is not equal to 0
+
+We will use [`ggscatterstats()`](https://indrajeetpatil.github.io/ggstatsplot/reference/ggscatterstats.html) from ggstatsplot package to generate the plot and statistical results.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Show code"
+
+# Set seed to ensure consistency of results 
+set.seed(123)
+
+# Perform Pearson's correlation test
+ggscatterstats(
+  data = combined,
+  x = Recreation,
+  y = joviality
+)
+```
+
+::: callout-note
+## Key Observations
+
+The p-value from the Pearson's correlation test is less than our level of significance of 0.05, hence we reject the null hypothesis and there is sufficient evidence that recreation spending and joviality are correlated. The statistical test results also show that the Pearson correlation coefficient (r) is 0.55. As a guideline, having a correlation coefficient between 0.5 and 0.7 indicate that recreation spending and joviality are moderately correlated.
+:::
+
+# References
 
 -   Understanding Lorenze Curve - [Lorenz Curve](https://www.investopedia.com/terms/l/lorenz-curve.asp#:~:text=The%20Lorenz%20curve%20is%20a%20graphical%20representation%20of%20the%20distribution,higher%20the%20level%20of%20inequality)
+-   Understanding Correlation Coefficient - [Correlation Coefficients](https://www.andrews.edu/~calkins/math/edrm611/edrm05.htm)
 -   Plotly Documentation - [R Figure Reference](https://plotly.com/r/reference/#box)
 -   Reference for Interactive Plot - [Visual Analytics of Resale Prices of Singapore Public Housing Properties](https://isss608-michaeldj.netlify.app/take-home_ex/take-home_ex03/take-home_ex03)
