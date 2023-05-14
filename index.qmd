@@ -1,11 +1,5 @@
 ---
-title: "ISSS608-Visual_Analytics"
+title: "ISSS608 Visual Analytics and Applications"
 ---
 
-This is a Quarto website.
-
-To learn more about Quarto websites visit <https://quarto.org/docs/websites>.
-
-```{r}
-1 + 1
-```
+Welcome to my \*\*ISSS608 Visual Analytics and Applications\*\* homepage. In this website, you will find my coursework and exercises completed for this course.

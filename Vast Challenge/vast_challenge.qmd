@@ -1,5 +1,5 @@
 ---
-title: "In-class Exercise 5"
+title: "Vast Challenge"
 author: "Fong Bao Xian"
 ---
 
@@ -14,7 +14,7 @@ pacman::p_load(jsonlite, tidygraph, ggraph, visNetwork, tidyverse)
 ## Import data
 
 ```{r}
-mc1 <- fromJSON("data/MC1.json")
+mc1 <- fromJSON("data/MC1/MC1.json")
 ```
 
 ```{r}

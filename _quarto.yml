@@ -1,19 +1,61 @@
 project:
   type: website
-
+  
 website:
-  title: "ISSS608-Visual_Analytics"
-  navbar:
-    left:
-      - href: index.qmd
-        text: Home
-      - about.qmd
+  page-navigation: true
+  title: "ISSS608 Visual Analytics and Applications"
+  site-url: "https://isss608-vaa-fongbx.netlify.app/"
+  
+  sidebar: 
+    style: "docked"
+    background: "#1C6758"
+    pinned: true
+    align: center
+    tools: 
+      - icon: github
+        href: https://github.com/fongbx
+    search: true
+    collapse-level: 1
+    contents:
+      - section: "Hands-on Exercise"
+        contents: 
+          - text: "Hands-on Exercise 1"
+            href: "Hands-on Ex/Hands-on_Ex01/Hands-on_Ex01.html"
+          - text: "Hands-on Exercise 2"
+            href: "Hands-on Ex/Hands-on_Ex02/Hands-on_Ex02.html"
+          - text: "Hands-on Exercise 3A"
+            href: "Hands-on Ex/Hands-on_Ex03A/Hands-on_Ex03A.html"
+          - text: "Hands-on Exercise 3B"
+            href: "Hands-on Ex/Hands-on_Ex03B/Hands-on_Ex03B.html"
+          - text: "Hands-on Exercise 4A"
+            href: "Hands-on Ex/Hands-on_Ex04A/Hands-on_Ex04A.html"
+          - text: "Hands-on Exercise 4B"
+            href: "Hands-on Ex/Hands-on_Ex04B/Hands-on_Ex04B.html"
+      - text: "---"
+      - section: "In-Class Exercise"
+        contents: 
+          - text: "In-class Exercise 1"
+            href: "In-class Ex/In-class_Ex01/In-class_Ex01.html"
+          - text: "In-class Exercise 4"
+            href: "In-class Ex/In-class_Ex04/In-class_Ex04.html"
+      - text: "---"
+      - section: "Take-home Exercise"
+        contents: 
+          - text: "Take-home Exercise 1"
+            href: "Take-home Ex/Take-home_Ex01/Take-home_Ex01.html"      
 
 format:
   html:
-    theme: cosmo
+    theme: default
+    smooth-scroll: true
     css: styles.css
     toc: true
+    toc-expand: 2
+    number-sections: true
+
+execute:
+  freeze: auto
+  warning: false
 
 editor: visual
 
