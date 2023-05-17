@@ -718,7 +718,7 @@
     "href": "Hands-on Ex/Hands-on_Ex04A/Hands-on_Ex04A.html#adding-dotplot-with-stat_dots",
     "title": "Hands-on Exercise 4A",
     "section": "4.3 Adding dotplot with stat_dots()",
-    "text": "4.3 Adding dotplot with stat_dots()\nNext, we will add the third geometry layer using stat_dots() of ggdist package. This produces a half-dotplot, which is similar to a histogram that indicates the number of samples (number of dots) in each bin. We select side = \"left\" to indicate we want it on the left-hand side.\n\nggplot(data = exam_data, \n       aes(x = RACE, \n           y = ENGLISH)) +\n  stat_halfeye(adjust = 0.5,\n               justification = -0.2,\n               .width = 0,\n               point_colour = NA) +\n  geom_boxplot(width = .20,\n               outlier.shape = NA) +\n  stat_dots(side = \"left\", \n            justification = 1.2, \n            binwidth = .5,\n            dotsize = 2)"
+    "text": "4.3 Adding dotplot with stat_dots()\nNext, we will add the third geometry layer using stat_dots() of ggdist package. This produces a half-dotplot, which is similar to a histogram that indicates the number of samples (number of dots) in each bin. We select side = “left” to indicate we want it on the left-hand side.\n\nggplot(data = exam_data, \n       aes(x = RACE, \n           y = ENGLISH)) +\n  stat_halfeye(adjust = 0.5,\n               justification = -0.2,\n               .width = 0,\n               point_colour = NA) +\n  geom_boxplot(width = .20,\n               outlier.shape = NA) +\n  stat_dots(side = \"left\", \n            justification = 1.2, \n            binwidth = .5,\n            dotsize = 2)"
   },
   {
     "objectID": "Hands-on Ex/Hands-on_Ex04A/Hands-on_Ex04A.html#finishing-touch",
@@ -726,5 +726,68 @@
     "title": "Hands-on Exercise 4A",
     "section": "4.4 Finishing touch",
     "text": "4.4 Finishing touch\nLastly, coord_flip() of ggplot2 package will be used to flip the raincloud chart horizontally to give it the raincloud appearance. At the same time, theme_economist() of ggthemes package is used to give the raincloud chart a professional publishing standard look.\n\nggplot(data = exam_data, \n       aes(x = RACE, \n           y = ENGLISH)) +\n  stat_halfeye(adjust = 0.5,\n               justification = -0.2,\n               .width = 0,\n               point_colour = NA) +\n  geom_boxplot(width = .20,\n               outlier.shape = NA) +\n  stat_dots(side = \"left\", \n            justification = 1.2, \n            binwidth = .5,\n            dotsize = 1.5) +\n  coord_flip() +\n  theme_economist()"
+  },
+  {
+    "objectID": "Hands-on Ex/Hands-on_Ex04D/Hands-on_Ex04D.html",
+    "href": "Hands-on Ex/Hands-on_Ex04D/Hands-on_Ex04D.html",
+    "title": "Hands-on Exercise 4D",
+    "section": "",
+    "text": "Funnel plot is a specially designed data visualisation for conducting unbiased comparison between outlets, stores or business entities. It is a common tool for comparing organisations or units using proportions or standardised rates. By the end of this hands-on exercise, we will learn to:\n\nplot funnel plots by using funnelPlotR package,\nplot static funnel plot by using ggplot2 package, and\nplot interactive funnel plot by using both plotly R and ggplot2 packages."
+  },
+  {
+    "objectID": "Hands-on Ex/Hands-on_Ex04D/Hands-on_Ex04D.html#install-and-load-r-packages",
+    "href": "Hands-on Ex/Hands-on_Ex04D/Hands-on_Ex04D.html#install-and-load-r-packages",
+    "title": "Hands-on Exercise 4D",
+    "section": "2.1 Install and Load R Packages",
+    "text": "2.1 Install and Load R Packages\nWe will use the following packages in this exercise:\n\nreadr for importing csv into R.\nFunnelPlotR for creating funnel plot.\nggplot2 for creating funnel plot manually.\nknitr for building static html table.\nplotly for creating interactive funnel plot.\n\n\npacman::p_load(tidyverse, FunnelPlotR, plotly, knitr)"
+  },
+  {
+    "objectID": "Hands-on Ex/Hands-on_Ex04D/Hands-on_Ex04D.html#import-data",
+    "href": "Hands-on Ex/Hands-on_Ex04D/Hands-on_Ex04D.html#import-data",
+    "title": "Hands-on Exercise 4D",
+    "section": "2.2 Import Data",
+    "text": "2.2 Import Data\nIn this section, COVID-19_DKI_Jakarta will be used. The data was downloaded from Open Data Covid-19 Provinsi DKI Jakarta portal. For this hands-on exercise, we are going to compare the cumulative COVID-19 cases and death by sub-district (i.e. kelurahan) as at 31st July 2021, DKI Jakarta.\nThe code chunk below imports the data into R and save it into a tibble data frame object called covid19.\n\ncovid19 <- read_csv(\"data/COVID-19_DKI_Jakarta.csv\") %>% \n  mutate_if(is.character, as.factor)\n\nWe will view the data below.\n\nhead(covid19)\n\n# A tibble: 6 × 7\n  `Sub-district ID` City        District `Sub-district` Positive Recovered Death\n              <dbl> <fct>       <fct>    <fct>             <dbl>     <dbl> <dbl>\n1        3172051003 JAKARTA UT… PADEMAN… ANCOL              1776      1691    26\n2        3173041007 JAKARTA BA… TAMBORA  ANGKE              1783      1720    29\n3        3175041005 JAKARTA TI… KRAMAT … BALE KAMBANG       2049      1964    31\n4        3175031003 JAKARTA TI… JATINEG… BALI MESTER         827       797    13\n5        3175101006 JAKARTA TI… CIPAYUNG BAMBU APUS         2866      2792    27\n6        3174031002 JAKARTA SE… MAMPANG… BANGKA             1828      1757    26"
+  },
+  {
+    "objectID": "Hands-on Ex/Hands-on_Ex04D/Hands-on_Ex04D.html#funnelplotr-methods-the-basic-plot",
+    "href": "Hands-on Ex/Hands-on_Ex04D/Hands-on_Ex04D.html#funnelplotr-methods-the-basic-plot",
+    "title": "Hands-on Exercise 4D",
+    "section": "3.1 FunnelPlotR methods: The basic plot",
+    "text": "3.1 FunnelPlotR methods: The basic plot\nThe code chunk below plots a funnel plot.\n\nfunnel_plot(\n  numerator = covid19$Positive,\n  denominator = covid19$Death,\n  group = covid19$`Sub-district`\n)\n\n\n\n\nA funnel plot object with 267 points of which 0 are outliers. \nPlot is adjusted for overdispersion. \n\n\n\n\n\n\n\n\nNote\n\n\n\nThings to learn from code chunk:\n\ngroup in this function is different from the scatterplot. Here, it defines the level of the points to be plotted i.e. Sub-district, District or City. If Cityc is chosen, there are only six data points.\nBy default, data_typeargument is \"SR\".\nlimit refers to plot limits. Accepted values are: 95 or 99, corresponding to 95% or 99.8% quantiles of the distribution"
+  },
+  {
+    "objectID": "Hands-on Ex/Hands-on_Ex04D/Hands-on_Ex04D.html#funnelplotr-methods-makeover-1",
+    "href": "Hands-on Ex/Hands-on_Ex04D/Hands-on_Ex04D.html#funnelplotr-methods-makeover-1",
+    "title": "Hands-on Exercise 4D",
+    "section": "3.2 FunnelPlotR methods: Makeover 1",
+    "text": "3.2 FunnelPlotR methods: Makeover 1\nThe code chunk below plots a funnel plot.\n\nfunnel_plot(\n  numerator = covid19$Death,\n  denominator = covid19$Positive,\n  group = covid19$`Sub-district`,\n  data_type = \"PR\",\n  xrange = c(0, 6500),\n  yrange = c(0, 0.05)\n)\n\n\n\n\nA funnel plot object with 267 points of which 7 are outliers. \nPlot is adjusted for overdispersion. \n\n\n\n\n\n\n\n\nNote\n\n\n\nThings to learn from code chunk:\n\ndata_type argument is used to change from default “SR” to “PR” (proportions)\nxrange and yrange are used to set the range of x-axis and y-axis"
+  },
+  {
+    "objectID": "Hands-on Ex/Hands-on_Ex04D/Hands-on_Ex04D.html#funnelplotr-methods-makeover-2",
+    "href": "Hands-on Ex/Hands-on_Ex04D/Hands-on_Ex04D.html#funnelplotr-methods-makeover-2",
+    "title": "Hands-on Exercise 4D",
+    "section": "3.3 FunnelPlotR methods: Makeover 2",
+    "text": "3.3 FunnelPlotR methods: Makeover 2\nWe further make over the funnel plot below.\n\nfunnel_plot(\n    numerator = covid19$Death,\n  denominator = covid19$Positive,\n  group = covid19$`Sub-district`,\n  data_type = \"PR\",   \n  xrange = c(0, 6500),  \n  yrange = c(0, 0.05),\n  label = NA,\n  title = \"Cumulative COVID-19 Fatality Rate by Cumulative Total Number of COVID-19 Positive Cases\",  \n  x_label = \"Cumulative COVID-19 Positive Cases\",\n  y_label = \"Cumulative Fatality Rate\"\n)\n\n\n\n\nA funnel plot object with 267 points of which 7 are outliers. \nPlot is adjusted for overdispersion. \n\n\n\n\n\n\n\n\nNote\n\n\n\nThings to learn from the code chunk:\n\nlabel = NA argument is to removed the default label outliers feature.\ntitle argument is used to add plot title.\nx_label and y_label arguments are used to add/edit x-axis and y-axis titles."
+  },
+  {
+    "objectID": "Hands-on Ex/Hands-on_Ex04D/Hands-on_Ex04D.html#computing-the-basic-derived-fields",
+    "href": "Hands-on Ex/Hands-on_Ex04D/Hands-on_Ex04D.html#computing-the-basic-derived-fields",
+    "title": "Hands-on Exercise 4D",
+    "section": "4.1 Computing the basic derived fields",
+    "text": "4.1 Computing the basic derived fields\nTo plot the funnel plot from scratch, we need to derive cumulative death rate and standard error of cumulative death rate.\n\ndf <- covid19 %>% \n  mutate(rate = Death / Positive) %>% \n  mutate(rate.se = sqrt((rate*(1-rate)) / Positive)) %>% \n  filter(rate > 0)\n\nNext, the fit.mean is computed using the code chunk below.\n\nfit.mean <- weighted.mean(df$rate, 1/df$rate.se^2)"
+  },
+  {
+    "objectID": "Hands-on Ex/Hands-on_Ex04D/Hands-on_Ex04D.html#calculate-lower-and-upper-limits-for-95-and-99.9-ci",
+    "href": "Hands-on Ex/Hands-on_Ex04D/Hands-on_Ex04D.html#calculate-lower-and-upper-limits-for-95-and-99.9-ci",
+    "title": "Hands-on Exercise 4D",
+    "section": "4.2 Calculate lower and upper limits for 95% and 99.9% CI",
+    "text": "4.2 Calculate lower and upper limits for 95% and 99.9% CI\nThe code chunk below is used to compute the lower and upper limits for 95% confidence interval.\n\nnumber.seq <- seq(1, max(df$Positive), 1)\nnumber.ll95 <- fit.mean - 1.96 * sqrt((fit.mean*(1-fit.mean)) / (number.seq)) \nnumber.ul95 <- fit.mean + 1.96 * sqrt((fit.mean*(1-fit.mean)) / (number.seq)) \nnumber.ll999 <- fit.mean - 3.29 * sqrt((fit.mean*(1-fit.mean)) / (number.seq)) \nnumber.ul999 <- fit.mean + 3.29 * sqrt((fit.mean*(1-fit.mean)) / (number.seq)) \ndfCI <- data.frame(number.ll95, number.ul95, number.ll999, \n                   number.ul999, number.seq, fit.mean)"
+  },
+  {
+    "objectID": "Hands-on Ex/Hands-on_Ex04D/Hands-on_Ex04D.html#plot-a-static-funnel-plot",
+    "href": "Hands-on Ex/Hands-on_Ex04D/Hands-on_Ex04D.html#plot-a-static-funnel-plot",
+    "title": "Hands-on Exercise 4D",
+    "section": "4.3 Plot a static funnel plot",
+    "text": "4.3 Plot a static funnel plot\nIn the code chunk below, ggplot2 functions are used to plot a static funnel plot.\n\np <- ggplot(df, aes(x = Positive, y = rate)) +\n  geom_point(aes(label=`Sub-district`), \n             alpha=0.4) +\n  geom_line(data = dfCI, \n            aes(x = number.seq, \n                y = number.ll95), \n            size = 0.4, \n            colour = \"grey40\", \n            linetype = \"dashed\") +\n  geom_line(data = dfCI, \n            aes(x = number.seq, \n                y = number.ul95), \n            size = 0.4, \n            colour = \"grey40\", \n            linetype = \"dashed\") +\n  geom_line(data = dfCI, \n            aes(x = number.seq, \n                y = number.ll999), \n            size = 0.4, \n            colour = \"grey40\") +\n  geom_line(data = dfCI, \n            aes(x = number.seq, \n                y = number.ul999), \n            size = 0.4, \n            colour = \"grey40\") +\n  geom_hline(data = dfCI, \n             aes(yintercept = fit.mean), \n             size = 0.4, \n             colour = \"grey40\") +\n  coord_cartesian(ylim=c(0,0.05)) +\n  annotate(\"text\", x = 1, y = -0.13, label = \"95%\", size = 3, colour = \"grey40\") + \n  annotate(\"text\", x = 4.5, y = -0.18, label = \"99%\", size = 3, colour = \"grey40\") + \n  ggtitle(\"Cumulative Fatality Rate by Cumulative Number of COVID-19 Cases\") +\n  xlab(\"Cumulative Number of COVID-19 Cases\") + \n  ylab(\"Cumulative Fatality Rate\") +\n  theme_light() +\n  theme(plot.title = element_text(size=12),\n        legend.position = c(0.91,0.85), \n        legend.title = element_text(size=7),\n        legend.text = element_text(size=7),\n        legend.background = element_rect(colour = \"grey60\", linetype = \"dotted\"),\n        legend.key.height = unit(0.3, \"cm\"))\np"
   }
 ]

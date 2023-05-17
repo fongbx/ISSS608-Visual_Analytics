@@ -146,7 +146,7 @@ ggplot(data = exam_data,
 
 # Visualising Distribution with Raincloud Plot
 
-Raincloud Plot is a data visualisation techniques that produces a half-density to a distribution plot. It gets the name because the density plot is in the shape of a \"raincloud\". The raincloud (half-density) plot enhances the traditional box-plot by highlighting multiple modalities (an indicator that groups may exist). The boxplot does not show where densities are clustered, but the raincloud plot does.
+Raincloud Plot is a data visualisation techniques that produces a half-density to a distribution plot. It gets the name because the density plot is in the shape of a "raincloud". The raincloud (half-density) plot enhances the traditional box-plot by highlighting multiple modalities (an indicator that groups may exist). The boxplot does not show where densities are clustered, but the raincloud plot does.
 
 In this section, we will learn how to create a raincloud plot to visualise the distribution of English score by race. It will be created using functions provided by **ggdist** and **ggplot2** packages.
 
@@ -185,7 +185,7 @@ ggplot(data = exam_data,
 
 ## Adding dotplot with stat_dots()
 
-Next, we will add the third geometry layer using [`stat_dots()`](https://mjskay.github.io/ggdist/reference/stat_dots.html) of ggdist package. This produces a half-dotplot, which is similar to a histogram that indicates the number of samples (number of dots) in each bin. We select side = \"left\" to indicate we want it on the left-hand side.
+Next, we will add the third geometry layer using [`stat_dots()`](https://mjskay.github.io/ggdist/reference/stat_dots.html) of ggdist package. This produces a half-dotplot, which is similar to a histogram that indicates the number of samples (number of dots) in each bin. We select side = "left" to indicate we want it on the left-hand side.
 
 ```{r}
 ggplot(data = exam_data, 
