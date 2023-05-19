@@ -74,7 +74,7 @@ funnel_plot(
 Things to learn from code chunk:
 
 -   `group` in this function is different from the scatterplot. Here, it defines the level of the points to be plotted i.e. Sub-district, District or City. If Cityc is chosen, there are only six data points.
--   By default, `data_type`argument is \"SR\".
+-   By default, `data_type`argument is "SR".
 -   `limit` refers to plot limits. Accepted values are: 95 or 99, corresponding to 95% or 99.8% quantiles of the distribution
 :::
 
