@@ -52,7 +52,9 @@ website:
       - section: "Take-home Exercise"
         contents: 
           - text: "Take-home Exercise 1"
-            href: "Take-home Ex/Take-home_Ex01/Take-home_Ex01.html"      
+            href: "Take-home Ex/Take-home_Ex01/Take-home_Ex01.html"  
+          - text: "Take-home Exercise 2"
+            href: "Take-home Ex/Take-home_Ex02/Take-home_Ex02.html"  
 
 format:
   html:

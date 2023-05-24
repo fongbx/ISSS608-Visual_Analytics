@@ -48,7 +48,7 @@ glimpse(gastech_edges)
 ```
 
 ::: callout-note
-The output report of gastech_edges above reveals that the *SentDate* is treated as \"Character\" data type instead of *date* data type. This is an error! Before we continue, it is important for us to change the data type of *SentDate* field to \"Date\" data type.
+The output report of gastech_edges above reveals that the *SentDate* is treated as "Character" data type instead of *date* data type. This is an error! Before we continue, it is important for us to change the data type of *SentDate* field to "Date" data type.
 :::
 
 ### Wrangling time
@@ -138,7 +138,7 @@ Two functions of **tidygraph** package can be used to create network objects, 
 
 ## Using tbl_graph() to build tidygraph data model
 
-In this section, we will use `tbl_graph()` of **tidygraph** package to build an tidygraph\'s network graph data.frame. More details are available in the reference guide of [`tbl_graph()`](https://tidygraph.data-imaginist.com/reference/tbl_graph.html)`.`
+In this section, we will use `tbl_graph()` of **tidygraph** package to build an tidygraph's network graph data.frame. More details are available in the reference guide of [`tbl_graph()`](https://tidygraph.data-imaginist.com/reference/tbl_graph.html)`.`
 
 ```{r}
 gastech_graph <- tbl_graph(nodes = gastech_nodes,
@@ -153,12 +153,12 @@ gastech_graph
 ```
 
 -   The output above reveals that *GAStech_graph* is a tbl_graph object with 54 nodes and 4541 edges.
--   The command also prints the first six rows of \"Node Data\" and the first three of \"Edge Data\".
+-   The command also prints the first six rows of "Node Data" and the first three of "Edge Data".
 -   It states that the Node Data is **active**. The notion of an active tibble within a tbl_graph object makes it possible to manipulate the data in one tibble at a time.
 
 ## Changing the active object
 
-The nodes tibble data frame is activated by default, but we can change which tibble data frame is active with the *activate()* function. Thus, if we wanted to rearrange the rows in the edges tibble to list those with the highest \"weight\" first, we could use *activate()* and then *arrange()*.
+The nodes tibble data frame is activated by default, but we can change which tibble data frame is active with the *activate()* function. Thus, if we wanted to rearrange the rows in the edges tibble to list those with the highest "weight" first, we could use *activate()* and then *arrange()*.
 
 ```{r}
 gastech_graph %>% activate(edges) %>% 
@@ -169,7 +169,7 @@ Visit the reference guide of [*activate()*](https://tidygraph.data-imaginist.co
 
 # Plotting Static Network Graphs with ggraph package
 
-[**ggraph**](https://ggraph.data-imaginist.com/) is an extension of **ggplot2**, making it easier to carry over basic ggplot skills to the design of network graphs. As in all network graph, there are three main aspects to a **ggraph**\'s network graph, they are:
+[**ggraph**](https://ggraph.data-imaginist.com/) is an extension of **ggplot2**, making it easier to carry over basic ggplot skills to the design of network graphs. As in all network graph, there are three main aspects to a **ggraph**'s network graph, they are:
 
 -   [nodes](https://cran.r-project.org/web/packages/ggraph/vignettes/Nodes.html),
 -   [edges](https://cran.r-project.org/web/packages/ggraph/vignettes/Edges.html) and
@@ -341,7 +341,7 @@ g + facet_nodes(~Department) +
 
 ## Centrality indices
 
-Centrality measures are a collection of statistical indices use to describe the relative important of the actors are to a network. There are four well-known centrality measures, namely: degree, betweenness, closeness and eigenvector. For deeper understanding of the principles and mathematics behind these measures, we can refer to *Chapter 7: Actor Prominence* of **A User\'s Guide to Network Analysis in R.**
+Centrality measures are a collection of statistical indices use to describe the relative important of the actors are to a network. There are four well-known centrality measures, namely: degree, betweenness, closeness and eigenvector. For deeper understanding of the principles and mathematics behind these measures, we can refer to *Chapter 7: Actor Prominence* of **A User's Guide to Network Analysis in R.**
 
 ## Visualising network metrics
 
@@ -396,8 +396,8 @@ g + theme_graph()
 
 -   [visNetwork()](http://datastorm-open.github.io/visNetwork/) is a R package for network visualization, using [vis.js](http://visjs.org/) javascript library.
 -   *visNetwork()* function uses a nodes list and edges list to create an interactive graph.
-    -   The nodes list must include an \"id\" column, and the edge list must have \"from\" and \"to\" columns.
-    -   The function also plots the labels for the nodes, using the names of the actors from the \"label\" column in the node list.
+    -   The nodes list must include an "id" column, and the edge list must have "from" and "to" columns.
+    -   The function also plots the labels for the nodes, using the names of the actors from the "label" column in the node list.
 -   The resulting graph is fun to play around with.
     -   We can move the nodes and the graph will use an algorithm to keep the nodes properly spaced.
 
@@ -444,11 +444,11 @@ visNetwork(gastech_nodes, gastech_edges_agg2) %>%
   visIgraphLayout(layout = 'layout_with_fr')
 ```
 
-Visit [Igraph](http://datastorm-open.github.io/visNetwork/igraph.html) to find out more about *visIgraphLayout*\'s argument.
+Visit [Igraph](http://datastorm-open.github.io/visNetwork/igraph.html) to find out more about *visIgraphLayout*'s argument.
 
 ## Working with visual attributes - Nodes
 
-visNetwork() looks for a field called \"group\" in the nodes object and colour the nodes according to the values of the group field.
+visNetwork() looks for a field called "group" in the nodes object and colour the nodes according to the values of the group field.
 
 The code chunk below renames Department field to group.
 
@@ -484,7 +484,7 @@ visNetwork(gastech_nodes,
   visLayout(randomSeed = 123)
 ```
 
-Visit [Option](#0) to find out more about visEdges\'s argument.
+Visit [Option](#0) to find out more about visEdges's argument.
 
 ## Interactivity
 
@@ -502,4 +502,4 @@ visNetwork(gastech_nodes, gastech_edges_agg2) %>%
   visLayout(randomSeed = 123)
 ```
 
-Visit [Option](#0) to find out more about visOption\'s argument.
+Visit [Option](#0) to find out more about visOption's argument.

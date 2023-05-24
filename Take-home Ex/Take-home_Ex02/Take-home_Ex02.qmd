@@ -1,0 +1,706 @@
+---
+title: "Take-home Exercise 2"
+subtitle: "Identify Temporal Patterns from Fishing Trades"
+author: "Fong Bao Xian"
+date: "22 May 2023"
+date-modified: "`r Sys.Date()`"
+---
+
+# Overview
+
+This exercise references the [Mini-Challenge 2](https://vast-challenge.github.io/2023/MC2.html) of VAST Challenge 2023. The objective of the exercise is to help FishEye International identify companies possibly engaged in illegal, unreported and unregulated (IUU) fishing through analysis of patterns in trade data.
+
+We will focus on task 1 in the mini-challenge, which is to use visual analytics to identify temporal patterns for individual entities and between entities in the knowledge graph FishEye created from trade records. We will also attempt to categorise the types of business relationship patterns found.
+
+# Getting Started
+
+## Import R Packages
+
+For this exercise, we will be using the following packages:
+
+-   [**tidyverse**](https://www.tidyverse.org/#:~:text=The%20tidyverse%20is%20an%20opinionated,%2C%20grammar%2C%20and%20data%20structures.&text=See%20how%20the%20tidyverse%20makes,%E2%80%9CR%20for%20Data%20Science%E2%80%9D.) - a collection of packages for data science and analysis, including packages for data import, wrangling and visualisation
+-   [**lubridate**](https://lubridate.tidyverse.org/) - package for working with date-times and time-spans
+-   [**jsonlite**](https://cran.r-project.org/web/packages/jsonlite/index.html) - for parsing json files from/to R objects
+-   [**tidygraph**](https://tidygraph.data-imaginist.com/)- for graph and network manipulation
+-   [**ggraph**](https://ggraph.data-imaginist.com/) - an extension of ggplot2 for supporting relational data structures such as networks, graphs and trees
+-   [**visNetwork**](https://datastorm-open.github.io/visNetwork/)- for interactive network visualisation
+-   [**igraph**](https://igraph.org/) - for creating and manipulating graphs and analysing networks
+-   [**RColorBrewer**](https://r-graph-gallery.com/38-rcolorbrewers-palettes.html) - offers colour palettes for R
+
+We will use `pacman::p_load` to install (if the packages are not yet installed) and load the packages into the R environment in a single command.
+
+```{r}
+pacman::p_load(tidyverse, lubridate, jsonlite, tidygraph, ggraph, visNetwork, igraph, plotly, RColorBrewer)
+```
+
+## Import Data
+
+We will use `fromJSON()` of **jsonlite** package to import *mc2_challenge_graph.json* into the R environment.
+
+```{r}
+mc2 <- fromJSON("data/MC2/mc2_challenge_graph.json")
+```
+
+# Data Preparation
+
+## Extracting all nodes
+
+The following code chunk is used to extract *nodes* data table from *mc2* list object and save the output in a tibble data frame object called *mc2_nodes_all*.
+
+```{r}
+# extract all nodes
+mc2_nodes_all <- as_tibble(mc2$nodes) %>% 
+  select(id, shpcountry, rcvcountry)
+```
+
+## Extracting all edges
+
+The following code chunk is used to extract *edges* data table from *mc2* list object and save the output in a tibble data frame object called *mc2_edges_all*.
+
+```{r}
+# extract all edges
+mc2_edges_all <- as_tibble(mc2$links) %>% 
+  mutate(ArrivalDate = ymd(arrivaldate)) %>% 
+  mutate(Year = year(ArrivalDate)) %>% 
+  select(source, target, ArrivalDate, Year, hscode, valueofgoods_omu, volumeteu, weightkg, valueofgoodsusd) %>% 
+  distinct()
+```
+
+::: callout-note
+## Things to learn from code
+
+-   `mutate()` is used two times to create two derived fields.
+    -   `ymd()` of **lubridate** package is used to covert *arrivaldate* field from character data type into date data type.
+    -   `year()` of **lubridate** package is used to convert the values in ArrivalDate field into year values.
+-   `select()` is used not only to select the field needed but also to re-organise the sequent of the fields
+:::
+
+## Preparing edges data
+
+Next, we will prepare two separate edges dataset *mc2_edges_agg* and *mc2_edges_agg_year* by taking the following steps:
+
+-   Filtering out records that are not related to fishing trade. With reference to the [HS Nomenclature 2022 edition](https://www.wcoomd.org/en/topics/nomenclature/instrument-and-tools/hs-nomenclature-2022-edition/hs-nomenclature-2022-edition.aspx) issued by the World Customs Organisation, we will extract out hscodes starting with '301' to '309' - for 'FISH AND CRUSTACEANS, MOLLUSCS AND OTHER AQUATIC INVERTEBRATES'
+-   Summarising one set of edge dataset *mc2_edges_agg* with the weights based on the frequency of trades between the source and target, and another set of edge dataset *mc2_edges_agg_year* with the weights based on the frequency of trades between the source and target and by year. We will also compute additional attributes of the edges based on the weight and value of goods.
+-   Filtering out edges with weights one and below (having one transaction or less)
+
+```{r}
+# aggegation throughout all years
+mc2_edges_agg <- mc2_edges_all %>% 
+  filter(startsWith(hscode, "30")) %>% 
+  filter(!startsWith(hscode, "300")) %>% 
+  group_by(source, target) %>% 
+  summarise(weights = n(),
+            totalweightkg = sum(weightkg),
+            totalvalueofgoodsusd = sum(valueofgoodsusd)) %>% 
+  filter(source != target) %>%
+  filter(weights > 1) %>% 
+  ungroup()
+
+# aggregation by year
+mc2_edges_agg_year <- mc2_edges_all %>% 
+  filter(startsWith(hscode, "30")) %>% 
+  filter(!startsWith(hscode, "300")) %>% 
+  group_by(source, target, Year) %>% 
+  summarise(weights = n(),
+            totalweightkg = sum(weightkg),
+            totalvalueofgoodsusd = sum(valueofgoodsusd)) %>% 
+  filter(source != target) %>% 
+  filter(weights > 1) %>% 
+  ungroup()
+```
+
+## Preparing nodes data
+
+Instead of using the nodes data table extracted from *mc2*, we will prepare a new nodes data table by using the source and target fields of the filtered *mc2_edges_agg* dataset. This is necessary to ensure that the nodes in nodes data tables include all the source and target values.
+
+```{r}
+# extract nodes from filtered edges
+id1 <- mc2_edges_agg %>% 
+  select(source) %>% 
+  rename(id = source)
+
+id2 <- mc2_edges_agg %>% 
+  select(target) %>% 
+  rename(id = target)
+
+mc2_nodes_extracted <- rbind(id1, id2) %>% 
+  distinct()
+
+# left join with mc2_nodes_all to get shpcountry, rcvcountry info
+mc2_nodes <- mc2_nodes_extracted %>%
+  left_join(mc2_nodes_all, by="id")
+```
+
+# Data Visualisation
+
+In the following sections, we will attempt to categorise the different types of business relationship patterns and drill in with visualisations to understand further details.
+
+## Understanding Most Frequent Trade Relationships
+
+First, we will attempt to understand entities with the most frequent trade relationships. We will extract the **top 100 pairs of trading entities with the most frequent number of trades between them** throughout the entire study period (between 2028 and 2034) using the code chunk below.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Show code"
+
+# extract trading entities with top 100 weights
+frequent_trades <- mc2_edges_agg %>% 
+  top_n(100, weights)
+
+# extract nodes of these trades
+id1 <- frequent_trades %>% 
+  select(source) %>% 
+  rename(id = source)
+  
+id2 <- frequent_trades %>% 
+  select(target) %>% 
+  rename(id = target)
+
+frequent_trades_nodes <- rbind(id1, id2) %>% 
+  distinct()
+```
+
+### Visualisation of the Frequent Trade Relationship Network
+
+Next, we will visualise the frequent trade relationship in an interactive network chart.
+
+::: callout-tip
+## Interactive Chart
+
+-   Select from drop-down or click on the interested entity on the network chart to view its first-degree linked nodes
+-   Hover over the nodes and links to view more details on them
+-   The darker red nodes indicate a higher degree centrality on the chart, meaning that these nodes have many frequent trade partners
+:::
+
+```{r}
+#| code-fold: true
+#| code-summary: "Show code"
+#| fig-width: 14
+#| fig-height: 14
+
+# generate graph based on new nodes/edges
+g1 <- graph_from_data_frame(frequent_trades, vertices = frequent_trades_nodes, directed = TRUE)
+
+# compute degree centrality in new graph
+degree_centrality <- degree(g1)
+frequent_trades_nodes$degree_centrality <- degree_centrality[as.character(frequent_trades_nodes$id)]
+
+# colur palatte for degree centrality colours
+sw_colors_centrality <- colorRampPalette(brewer.pal(9, "Oranges"))(15)
+
+# customise edges for plotting
+frequent_trades <- frequent_trades %>% 
+  rename(from = source,
+         to = target) %>% 
+  mutate(width = weights/max(weights)*15, # width of edge
+         title = paste0("Trades: ", weights), # tooltip when hover over
+         arrows = "to", # set arrow for each edge
+         color = "#0085AF" # color of edge
+         ) 
+
+# customise nodes for plotting
+frequent_trades_nodes <- frequent_trades_nodes %>% 
+  mutate(shape = "dot", # customise shape of nodes
+         title = id, # tooltip when hover over
+         size = 40, # set size of nodes
+         color.border = "#013848", # border colour of nodes
+         color.background = sw_colors_centrality[degree_centrality], # background colour of nodes
+         color.highlight.background = "#FF8000" # background colour of nodes when highlighted
+         )
+
+# plot interactive graph
+visNetwork(frequent_trades_nodes, frequent_trades,
+           height = "500px", width = "100%", main = "Frequent Trade Relationship Network (Top 100)") %>% 
+  visIgraphLayout() %>%
+  visOptions(highlightNearest = list(enabled = T, degree = 1),
+             nodesIdSelection = TRUE) %>% 
+  visLayout(randomSeed = 123)
+```
+
+::: callout-note
+## Key Observations
+
+The nodes with many frequent trade partners (i.e., high degree centrality on the Frequent Trade Relationship Network) include:
+
+-   **Caracola del Sol Services** (with 13 frequent trade partners)
+-   **Pao gan SE Seal** (with 10 frequent trade partners)
+-   **Sea Breezes S.A. de C.V. Freight** (with 8 frequent trade partners)
+
+As these entities have many established connections and engage in extensive trade activities, they could likely be identified as the **key players or influential actors in the trade network**.
+
+Further analysis (not covered in this exercise) can potentially explore the nature of the trade relationships of these entities, including the types of goods traded (based on *hscode*), the geographical regions involved (based on *shpcountry* and *rcvcountry* of partners) and the duration and stability of the trade relationships. Such analyses can provide further insights into the dynamics of trade patterns.
+:::
+
+### Visualisation of Time Series Plot for Top 5 Frequent Trade Partners
+
+We will also view the top 5 frequent trade partners on a time series plot to see how their trade frequency has changed over the years.
+
+::: callout-tip
+## Interactive Chart
+
+-   Click on item in legend to add/remove line from chart
+-   Double-click on item in legend to isolate line for viewing on chart
+-   Hover over the chart to view more details including the total traded weight and value
+:::
+
+```{r}
+#| code-fold: true
+#| code-summary: "Show code"
+#| fig-width: 14
+#| fig-height: 14
+
+# extract top 5 frequency trades
+top5_frequent_trades <- frequent_trades %>% 
+  arrange(desc(weights)) %>% 
+  top_n(5, weights) %>% 
+  select(from, to) %>% 
+  left_join(mc2_edges_agg_year, by = c('from'='source', 'to'='target')) %>% 
+  mutate(source_to_target = paste0('From: ', from, '\nTo: ', to)) %>% 
+  rename("Num of Trades" = weights,
+         "Total Traded Weight" = totalweightkg,
+         "Total Traded Value (USD)" = totalvalueofgoodsusd)
+
+# plot time series plot for trades over years
+p1 <- ggplot(data = top5_frequent_trades,
+       aes(x = Year,
+           y = `Num of Trades`,
+           color = source_to_target,
+           label1 = `Total Traded Weight`, # include dummy labels for display in tooltips
+           label2 = `Total Traded Value (USD)`)) + # include dummy labels for display in tooltips
+  geom_point() +
+  geom_line() +
+  labs(
+    y = "Number of Trades",
+    title = "Number of Trades over Years for Top 5 Frequent Trade Partners"
+  ) +
+  theme(
+    axis.title.x = element_blank()
+  )
+
+# wrap plot in ggplotly for interactivity
+ggplotly(p1, tooltip = c("Year", "Num of Trades",
+                         "Total Traded Weight",
+                         "Total Traded Value (USD)")) %>%
+  layout(legend = list(orientation = "h", x = 0, y = -0.2))
+```
+
+::: callout-note
+## Key Observations
+
+We observe that trade partners with the most number of trades may not be the most stable ones. For example, between the trade partners **nián yú Ltd. Corporation** and **Costa de la Felicidad Shipping**, although they have high frequency of trade in 2028 and 2029, the trades start to dwindle from 2030 onwards and in 2034, there were no longer any trades between them.
+:::
+
+## Understanding Most Regular Trade Relationships
+
+Next, we want to understand which entities have regular trade relationships. We will extract **pairs of trading entities with trades across all seven years** of the entire study period (between 2028 and 2034) and with the **top 100 average trades per year** using the code chunk below.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Show code"
+
+# extract trading entities with all trade in all 7 years and top 100 based on avgtradeperyear
+regular_trades <- mc2_edges_agg_year %>% 
+  group_by(source, target) %>% 
+  mutate(years_traded = n(),
+         min_year = min(Year),
+         max_year = max(Year),
+         avgtradeperyear = round(mean(weights),0)) %>% 
+  ungroup() %>% 
+  select(source, target, years_traded, min_year, max_year, avgtradeperyear) %>% 
+  distinct() %>% 
+  filter(years_traded == 7) %>%
+  top_n(100, avgtradeperyear)
+
+# extract nodes of these trades
+id1 <- regular_trades %>% 
+  select(source) %>% 
+  rename(id = source)
+  
+id2 <- regular_trades %>% 
+  select(target) %>% 
+  rename(id = target)
+
+regular_trade_nodes <- rbind(id1, id2) %>% 
+  distinct()
+```
+
+### Visualisation of the Regular Trade Network
+
+We will visualise the regular trade relationship in an interactive network chart below.
+
+::: callout-tip
+## Interactive Chart
+
+-   Select from drop-down or click on the interested entity on the network chart to view its first-degree linked nodes
+-   Hover over the nodes and links to view more details on them
+-   The darker red nodes indicate a higher degree centrality on the chart, meaning that these nodes have many regular trade partners
+:::
+
+```{r}
+#| code-fold: true
+#| code-summary: "Show code"
+#| fig-width: 14
+#| fig-height: 14
+
+# generate graph based on new nodes/edges
+g2 <- graph_from_data_frame(regular_trades, vertices = regular_trade_nodes, directed = TRUE)
+
+# compute degree centrality in new graph
+degree_centrality <- degree(g2)
+regular_trade_nodes$degree_centrality <- degree_centrality[as.character(regular_trade_nodes$id)]
+
+# colur palatte for degree centrality colours
+sw_colors_centrality <- colorRampPalette(brewer.pal(9, "Oranges"))(20)
+
+# customise edges for plotting
+regular_trades <- regular_trades %>% 
+  rename(from = source,
+         to = target) %>% 
+  mutate(width = avgtradeperyear/max(avgtradeperyear)*15, # width of edge
+         title = paste0("Avg Trade per year: ", avgtradeperyear), # tooltip when hover over
+         arrows = "to", # set arrow for each edge
+         color = "#0085AF" # color of edge
+         ) 
+
+# customise nodes for plotting
+regular_trade_nodes <- regular_trade_nodes %>% 
+  mutate(shape = "dot", # customise shape of nodes
+         title = id, # tooltip when hover over
+         size = 40, # set size of nodes
+         color.border = "#013848", # border colour of nodes
+         color.background = sw_colors_centrality[degree_centrality], # background colour of nodes
+         color.highlight.background = "#FF8000" # background colour of nodes when highlighted
+         )
+
+# plot interactive graph
+visNetwork(regular_trade_nodes, regular_trades,
+           height = "500px", width = "100%", main = "Regular Trade Relationship Network (Top 100)") %>% 
+  visIgraphLayout() %>%
+  visOptions(highlightNearest = list(enabled = T, degree = 1, hover = T),
+             nodesIdSelection = TRUE) %>% 
+  visLayout(randomSeed = 123)
+```
+
+::: callout-note
+## Key Observations
+
+The nodes with many regular trade partners (i.e., high degree centrality on the Regular Trade Relationship Network) include:
+
+-   **Mar del Este CJSC** (with 18 regular trade partners)
+-   **Caracola del Sol Services** (with 8 regular trade partners)
+-   **hǎi dǎn Corporation Wharf** (with 8 regular trade partners)
+
+As these entities have many established and stable trade relationships within the network, they could likely be identified as the **preferred trading partners**.
+
+Further analysis (not covered in this exercise) can potentially explore the understanding of the role of these entities within the value chain (i.e., whether they act as suppliers of distributors) and the geographical region that they are active in (based on *shpcountry* and *rcvcountry* of partners). Understanding their position in the value chain and active geographical region can help to assess their influence on the flow of goods and services and their impact on the overall trade ecosystem.
+:::
+
+### Visualisation of Time Series Plot for Top 5 Regular Trade Partners
+
+We will also view the top 5 regular trade partners on a time series plot to see how their trade frequency has changed over the years.
+
+::: callout-tip
+## Interactive Chart
+
+-   Click on item in legend to add/remove line from chart
+-   Double-click on item in legend to isolate line for viewing on chart
+-   Hover over the chart to view more details including the total traded weight and value
+:::
+
+```{r}
+#| code-fold: true
+#| code-summary: "Show code"
+#| fig-width: 14
+#| fig-height: 14
+
+# extract top 5 regular trades
+top5_regular_trades <- regular_trades %>% 
+  arrange(desc(avgtradeperyear)) %>% 
+  top_n(5, avgtradeperyear) %>% 
+  select(from, to) %>% 
+  left_join(mc2_edges_agg_year, by = c('from'='source', 'to'='target')) %>% 
+  mutate(source_to_target = paste0('From: ', from, '\nTo: ', to)) %>% 
+  rename("Num of Trades" = weights,
+         "Total Traded Weight" = totalweightkg,
+         "Total Traded Value (USD)" = totalvalueofgoodsusd)
+
+# plot time series plot for trades over years
+p2 <- ggplot(data = top5_regular_trades,
+       aes(x = Year,
+           y = `Num of Trades`,
+           color = source_to_target,
+           label1 = `Total Traded Weight`, # include dummy labels for display in tooltips
+           label2 = `Total Traded Value (USD)`)) + # include dummy labels for display in tooltips
+  geom_point() +
+  geom_line() +
+  labs(
+    y = "Number of Trades",
+    title = "Number of Trades over Years for Top 5 Regular Trade Partners"
+  ) +
+  theme(
+    axis.title.x = element_blank()
+  )
+
+# wrap plot in ggplotly for interactivity
+ggplotly(p2, tooltip = c("Year", "Num of Trades",
+                         "Total Traded Weight",
+                         "Total Traded Value (USD)")) %>%
+  layout(legend = list(orientation = "h", x = 0, y = -0.2))
+```
+
+::: callout-note
+## Key Observations
+
+Most of the regular trade partners have fairly consistent trade volume over the years. The exception is between the trade partners **Sea Breezes S.A. de C.V. Frieght** and **Caracola del Sol Services**, which saw a spike in number of trades in 2030 and 2031. The reasons for the spike are not known and further analyses (not covered in this exercise) can be done to investigate into such patterns.
+:::
+
+## Understanding Intermediaries in Trade Network
+
+Last but not least, we want to understand which are the intermediaries in the trade network. This refers to the nodes with high betweenness centrality. Understanding intermediaries can be potentially help in the identification of illegal fishing activities as they act as middlemen or facilitators in trade transactions between other entities.
+
+We will extract the **entities with the top 10 highest betweenness centrality (i.e., top 10 intermediaries)** using the code chunk below.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Show code"
+#| fig-width: 14
+#| fig-height: 14
+
+# generate graph based on all nodes/edges
+g3 <- graph_from_data_frame(mc2_edges_agg, vertices = mc2_nodes, directed = TRUE)
+
+# compute betweenness centrality in new graph
+betw_centrality <- betweenness(g3)
+mc2_nodes$betw_centrality <- betw_centrality[as.character(mc2_nodes$id)]
+
+# extract nodes with top 10 betweenness centrality
+high_betweenness_nodes <- mc2_nodes %>% 
+  top_n(10, betw_centrality)
+
+# extract edges with top 10 betweenness nodes on ends
+high_betweenness_edges <- mc2_edges_agg %>%
+  filter(source %in% high_betweenness_nodes[['id']] |
+           target %in% high_betweenness_nodes[['id']])
+
+# extract nodes of these trades (to also visualise the partners of top 10)
+id1 <- high_betweenness_edges %>% 
+  select(source) %>%
+  rename(id = source)
+
+id2 <- high_betweenness_edges %>%
+  select(target) %>%
+  rename(id = target)
+
+high_betweenness_nodes_combined <- rbind(id1, id2) %>%
+  distinct() %>% 
+  mutate(top10 = case_when(
+    id %in% high_betweenness_nodes[["id"]] ~ "Yes",
+    TRUE ~ "No"
+  ))
+```
+
+### Visualisation of Trade Network of Top 10 Intermediaries
+
+The following visualises the trade relationships of the top 10 intermediaries in an interactive network chart.
+
+::: callout-tip
+## Interactive Chart
+
+-   The darker orange nodes are top 10 intermediaries, i.e., the nodes with the highest betweenness centrality
+-   Select from drop-down or click on the interested entity on the network chart to view its first-degree linked nodes
+-   Hover over the nodes and links to view more details on them
+:::
+
+```{r}
+#| code-fold: true
+#| code-summary: "Show code"
+#| fig-width: 14
+#| fig-height: 14
+
+# generate graph based on new nodes/edges
+g4 <- graph_from_data_frame(high_betweenness_edges, vertices = high_betweenness_nodes_combined, directed = TRUE)
+
+# colur palatte for betweenness centrality colours
+sw_colors <- colorRampPalette(brewer.pal(2, "RdBu"))(2)
+high_betweenness_nodes_combined$top10.type <- NA
+high_betweenness_nodes_combined$top10.type[high_betweenness_nodes_combined$top10 == "Yes"] <- sw_colors[1]
+high_betweenness_nodes_combined$top10.type[high_betweenness_nodes_combined$top10 == "No"] <- sw_colors[2]
+
+# customise edges for plotting
+high_betweenness_edges <- high_betweenness_edges %>% 
+  rename(from = source,
+         to = target) %>% 
+  mutate(width = weights/max(weights)*15, # width of edge
+         title = paste0("Trades: ", weights), # tooltip when hover over
+         arrows = "to", # set arrow for each edge
+         color = "#0085AF" # color of edge
+         ) 
+
+# customise nodes for plotting
+high_betweenness_nodes_combined <- high_betweenness_nodes_combined %>% 
+  mutate(shape = "dot", # customise shape of nodes
+         title = id, # tooltip when hover over
+         size = 40, # set size of nodes
+         color.border = "#013848", # border colour of nodes
+         color.background = high_betweenness_nodes_combined$top10.type, # background colour of nodes
+         color.highlight.background = "#FF8000" # background colour of nodes when highlighted
+         )
+
+# plot interactive graph
+visNetwork(high_betweenness_nodes_combined, high_betweenness_edges,
+           height = "500px", width = "100%", main = "Trade Network of Top 10 Intermediaries") %>% 
+  visIgraphLayout() %>%
+  visOptions(highlightNearest = list(enabled = T, degree = 1, hover = T),
+             nodesIdSelection = TRUE) %>% 
+  visLayout(randomSeed = 123)
+```
+
+::: callout-note
+## Key Observations
+
+The top 10 intermediaries, in order from highest to lowest between centrality, are the following:
+
+-   **David Ltd. Liability Co Forwading**
+-   **Costa de Oro S.p.A.**
+-   **Playa de la Felicidad Ltd Consultants**
+-   **Shou gan Sagl Mudflat**
+-   **bái suō wěn lú S.p.A.**
+-   **AtlanticAppetite Oyster Ltd. Corporation Investment**
+-   **The Salty Dog Limited Liability Company**
+-   **xiǎo lóng xiā NV**
+-   **Tamil Nadu SE Carriers**
+-   **Aqua Aura SE Marine life**
+
+As these entities play a role in **connecting entities involved in trade**, we can analyse the trade relationships and transactions involving the intermediaries further to see if we can identify any suspicious patterns such as sporadic or unusual trade volumes.
+:::
+
+### Visualisation of Trade Partners over Years for Top 1 Intermediary
+
+For the purpose of further analysis, we will extract the trade information relating to the top 1 intermediary (**David Ltd. Liability Co Forwading**) for analysis. The following plot shows the number of trade partners that the entity has over the years.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Show code"
+#| fig-width: 14
+#| fig-height: 8
+
+# extract top 1 intermediary
+top_betweenness_node <- high_betweenness_nodes %>% 
+  top_n(1, betw_centrality)
+
+# extract edges with top 1 intermediary on ends
+top_betweenness_node_edges <- mc2_edges_agg_year %>%
+  filter(source == top_betweenness_node[['id']] |
+           target == top_betweenness_node[['id']])
+
+top_betweenness_node_edges1 <- top_betweenness_node_edges %>% 
+  filter(source == top_betweenness_node[['id']]) %>% 
+  group_by(Year) %>% 
+  summarise("partners_shipped_to" = n())
+
+top_betweenness_node_edges2 <- top_betweenness_node_edges %>% 
+  filter(target == top_betweenness_node[['id']]) %>% 
+  group_by(Year) %>% 
+  summarise("partners_received_from" = n())
+
+top_betweenness_node_edges_combined <- top_betweenness_node_edges1 %>% 
+  left_join(top_betweenness_node_edges2, by = "Year") %>% 
+  pivot_longer(partners_shipped_to:partners_received_from,
+               names_to = "type",
+               values_to = "Num of Partners")
+
+# plot barplot of the number of trade partners over years
+p3 <- ggplot(top_betweenness_node_edges_combined,
+       aes(x = Year, y = `Num of Partners`)) +
+  geom_col(aes(fill = type), position = position_dodge(0.8), width = 0.7) +
+  labs(
+    y = "Number of Trade Partners",
+    title = paste0("Number of Trade Partners over Years for ",
+                   top_betweenness_node[['id']])
+  ) +
+  theme(
+    axis.title.x = element_blank()
+  )
+
+# wrap plot in ggplotly for interactivity
+ggplotly(p3, tooltip = c("Year", "Num of Partners"))
+```
+
+::: callout-note
+## Key Observations
+
+The intermediary **David Ltd. Liability Co Forwading** plays a more active role in receiving rather than delivery of fish trades. Over the years, the number of trade partners seemed to fluctuate quite a bit, indicative that the entity has some sporadic trade partners.
+:::
+
+### Visualisation of Time Series Plot for Top 1 Intermediary
+
+Given the understanding that **David Ltd. Liability Co Forwading** plays a more active role in receiving rather than delivery of fish trades, we will deep five further into the trades in which **David Ltd. Liability Co Forwading** is a recipient (i.e., we will examine the trades from the multiple source entities to **David Ltd. Liability Co Forwading**).
+
+The following is a time series plot to see how the trade frequency from these source entities to **David Ltd. Liability Co Forwading** change over the years.
+
+::: callout-tip
+## Interactive Chart
+
+-   Many lines show at the beginning. Double-click on one item in legend to isolate line for viewing on chart
+-   Click on additional items in legend to add/remove line from chart
+-   Hover over the chart to view more details including the total traded weight and value
+:::
+
+```{r}
+#| code-fold: true
+#| code-summary: "Show code"
+#| fig-width: 14
+#| fig-height: 18
+
+# extract trades where top 1 intermediary is receipient
+top_betweenness_node_edges_receipient <- top_betweenness_node_edges %>% 
+  filter(target == top_betweenness_node[['id']]) %>% 
+  rename("Num of Trades" = weights,
+         "Total Traded Weight" = totalweightkg,
+         "Total Traded Value (USD)" = totalvalueofgoodsusd)
+
+# plot time series plot for trades over years
+p4 <- ggplot(data = top_betweenness_node_edges_receipient,
+       aes(x = Year,
+           y = `Num of Trades`,
+           color = source,
+           label1 = `Total Traded Weight`, # include dummy labels for display in tooltips
+           label2 = `Total Traded Value (USD)`)) + # include dummy labels for display in tooltips
+  geom_point() +
+  geom_line() +
+  labs(
+    y = "Number of Trades",
+    title = paste0("Number of Trades over Years to ",
+                   top_betweenness_node[['id']])
+  ) +
+  theme(
+    axis.title.x = element_blank()
+  )
+
+# wrap plot in ggplotly for interactivity
+ggplotly(p4, tooltip = c("Year", "Num of Trades",
+                         "Total Traded Weight",
+                         "Total Traded Value (USD)")) %>%
+  layout(legend = list(orientation = "h", x = 0, y = -0.2))
+```
+
+::: callout-note
+## Key Observations
+
+Among the source partners of **David Ltd. Liability Co Forwading**, there are quite a few entities with similar names. We will isolate the trades of **David Ltd. Liability Co Forwading** with some of these entities and describe the observed trends below.
+
+-   **2 Limited Liability Company** and **4 Limited Liability Company Seaport**
+    -   **David Ltd. Liability Co Forwading** has only 2 trades with **2 Limited Liability Company** in 2029. Following which, it started trading with **4 Limited Liability Company Seaport** between 2031 and 2034
+-   **Kerala Market Plc Transport** and **Kerala Market Sp United**
+    -   **David Ltd. Liability Co Forwading** has only 5 trades with **Kerala Market Plc Transport** in 2028. Following which, it started trading with **Kerala Market Sp United** between 2029 and 2030
+
+We understand from FishEye that one observed trend is that companies caught fishing illegally will shut down and then often start up again under a different name. The abovementioned entities could have suspicions of such behaviour as their trade activities are sporadic and when activities of one entity ceases, activities with another entity of similar name appears.
+
+Further analysis (not covered in this exercise) can drill in further to these trade partners of the intermediaries and analyse their trade patterns and behaviour. We can also look into other red flags of illegal fishing including analysing whether there are any abnormal patterns relating to traded value or traded weight.
+:::
+
+# References
+
+-   [Modelling, Visualising and Analysing Network Data with R](https://r4va.netlify.app/chap27.html)
+-   [Network Visualisation in R](https://jtr13.github.io/cc21fall2/network-visualization-in-r.html)
+-   [Choose variable to display in tooltip when using ggplotly](https://stackoverflow.com/questions/36325154/how-to-choose-variable-to-display-in-tooltip-when-using-ggplotly)
