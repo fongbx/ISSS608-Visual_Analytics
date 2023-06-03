@@ -1,0 +1,94 @@
+---
+title: "Take-home Exercise 3"
+subtitle: "Detect Anomalies in Fishing-Related Companies"
+author: "Fong Bao Xian"
+date: "5 June 2023"
+date-modified: "`r Sys.Date()`"
+---
+
+# Overview
+
+This exercise references [Mini-Challenge 3](https://vast-challenge.github.io/2023/MC3.html) of VAST Challenge 2023. The objective of the exercise is to help FishEye International identify companies possibly engaged in illegal, unreported and unregulated (IUU) fishing through analysis of anomalous company structures.
+
+We will focus on task 1 in the mini-challenge, which is to use visual analytics to identify anomalies in the business groups present in the knowledge graph.
+
+# Getting Started
+
+## Import R Packages
+
+For this exercise, we will be using the following packages:
+
+-   [**tidyverse**](https://www.tidyverse.org/#:~:text=The%20tidyverse%20is%20an%20opinionated,%2C%20grammar%2C%20and%20data%20structures.&text=See%20how%20the%20tidyverse%20makes,%E2%80%9CR%20for%20Data%20Science%E2%80%9D.) - a collection of packages for data science and analysis, including packages for data import, wrangling and visualisation
+
+We will use `pacman::p_load` to install (if the packages are not yet installed) and load the packages into the R environment in a single command.
+
+```{r}
+pacman::p_load(tidyverse, jsonlite, tidygraph, ggraph, visNetwork, igraph, plotly, RColorBrewer, graphlayouts, ggforce, tidytext)
+```
+
+## Import Data
+
+We will use `fromJSON()` of **jsonlite** package to import *MC3.json* into the R environment.
+
+```{r}
+mc3 <- fromJSON("data/MC3/MC3.json")
+```
+
+# Data Preparation
+
+## Extracting all nodes
+
+The following code chunk is used to extract *nodes* data table from *mc3* list object and save the output in a tibble data frame object called *mc3_nodes_all*. Note that the format of *nodes* inside *mc3* is in list format and not in dataframe format, thus it is not sufficient that we convert the *nodes* to tibble format. We still need to perform additional wrangling below.
+
+```{r}
+# extract all nodes
+mc3_nodes_all <- as_tibble(mc3$nodes) %>% 
+  mutate(country = as.character(country),
+         id = as.character(id),
+         product_services = as.character(product_services),
+         revenue_omu = as.numeric(as.character(revenue_omu)),
+         type = as.character(type)) %>% 
+  select(id, country, type, revenue_omu, product_services) ## reorganise sequence
+
+head(mc3_nodes_all)
+```
+
+## Extracting all edges
+
+The following code chunk is used to extract *edges* data table from *mc3* list object and save the output in a tibble data frame object called *mc3_edges_all*.
+
+```{r}
+mc3_edges_all <- as_tibble(mc3$links) %>% 
+  distinct() %>% 
+  mutate(source = as.character(source),
+         target = as.character(target),
+         type = as.character(type)) %>% 
+  group_by(source, target, type) %>% 
+  summarise(weights = n()) %>% 
+  filter(source != target) %>% 
+  ungroup()
+
+head(mc3_edges_all)
+```
+
+### Text Sensing with Tidytext
+
+```{r}
+tidynodes <- mc3_nodes_all %>% 
+  unnest_tokens(word, product_services,
+                to_lower = TRUE,
+                strip_punct = TRUE)
+
+head(tidynodes)
+```
+
+## Approach
+
+### Data Preparation
+
+-   If you refer to product_services field on the nodes of the knowledge graph, you will notice that not all companies are involved in fisheries industry.  With reference to the information provided in product_services field, we can extract and classify the companies into different business groups.
+
+### Analysis
+
+-   Find companies with many layers of beneficiaries (find high eigenvector or high degree centrality?)
+-   Find companies linked to companies from many different countries

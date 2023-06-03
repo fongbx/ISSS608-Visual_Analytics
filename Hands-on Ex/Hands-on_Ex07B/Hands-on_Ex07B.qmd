@@ -1,0 +1,66 @@
+---
+title: "Hands-on Exercise 7B"
+subtitle: "Time on the Horizon: ggHoriPlot methods"
+author: "Fong Bao Xian"
+---
+
+# Overview
+
+In this exercise, we will learn a new type of plot - Horizon Plot. A horizon graph is an analytical graphical method specially designed for visualising large numbers of time-series. It aims to overcome the issue of visualising highly overlapping time-series.
+
+A horizon plot is essentially an area chart that has been split into slices and the slices then layered on top of one another with the areas representing the highest (absolute) values on top. Each slice has a greater intensity of colour based on the absolute value it represents.
+
+We will learn how to plot a [horizon graph](http://www.perceptualedge.com/articles/visual_business_intelligence/time_on_the_horizon.pdf) using [ggHoriPlot](https://rivasiker.github.io/ggHoriPlot/) package.
+
+# Getting Started
+
+## Install and Launch R Packages
+
+Before getting start, make sure that **ggHoriPlot** has been included in the `pacman::p_load()` statement below.
+
+```{r}
+pacman::p_load(ggHoriPlot, ggthemes, tidyverse)
+```
+
+## Import Data
+
+For the purpose of this hands-on exercise, [Average Retail Prices Of Selected Consumer Items](https://tablebuilder.singstat.gov.sg/table/TS/M212891) will be used.
+
+```{r}
+averp <- read_csv("data/AVERP.csv") %>% 
+  mutate(`Date` = dmy(`Date`))
+```
+
+::: callout-note
+## Things to learn from code
+
+By default, read_csv will import data in Date field as Character data type. [`dmy()`](https://lubridate.tidyverse.org/reference/ymd.html) of [**lubridate**](https://lubridate.tidyverse.org/) package to palse the Date field into appropriate Date data type in R.
+:::
+
+# Plotting the Horizon Graph
+
+We will be using the [`geom_horizon()`](https://rivasiker.github.io/ggHoriPlot/reference/geom_horizon.html) function to plot the horizon graph.
+
+```{r}
+averp %>% 
+  filter(Date >= "2018-01-01") %>%
+  ggplot() +
+  geom_horizon(aes(x = Date, y = Values), 
+               origin = "midpoint", 
+               horizonscale = 6) +
+  facet_grid(`Consumer Items`~.) +
+    theme_few() +
+  scale_fill_hcl(palette = 'RdBu') +
+  theme(panel.spacing.y=unit(0, "lines"), strip.text.y = element_text(
+    size = 5, angle = 0, hjust = 0),
+    legend.position = 'none',
+    axis.text.y = element_blank(),
+    axis.text.x = element_text(size=7),
+    axis.title.y = element_blank(),
+    axis.title.x = element_blank(),
+    axis.ticks.y = element_blank(),
+    panel.border = element_blank()
+    ) +
+    scale_x_date(expand=c(0,0), date_breaks = "3 month", date_labels = "%b%y") +
+  ggtitle('Average Retail Prices of Selected Consumer Items (Jan 2018 to Dec 2022)')
+```

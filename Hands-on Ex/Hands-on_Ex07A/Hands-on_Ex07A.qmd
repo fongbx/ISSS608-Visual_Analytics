@@ -1,0 +1,38 @@
+---
+title: "Hands-on Exercise 7A"
+subtitle: "Visualising and Analysing Time-oriented Data"
+author: "Fong Bao Xian"
+---
+
+# Overview
+
+By the end of this hands-on exercise, we will be able create the following data visualisations by using R packages:
+
+-   plotting a calender heatmap by using ggplot2 functions,
+-   plotting a cycle plot by using ggplot2 function,
+-   plotting a slopegraph
+-   plotting a horizon chart
+
+# Getting Started
+
+## Install and Launch R Packages
+
+We will use the following packages for this exercise.
+
+```{r}
+pacman::p_load(scales, viridis, lubridate, ggthemes, gridExtra, readxl, knitr, data.table, CGPfunctions, ggHoriPlot, tidyverse)
+```
+
+## Load Data
+
+We will use *eventlog.csv* file for this exercise.
+
+```{r}
+attacks <- read_csv("data/eventlog.csv")
+```
+
+We will examine the loaded data below. The function *kable()* can be used to review the structure of the imported data frame.
+
+```{r}
+kable(head(attacks))
+```
