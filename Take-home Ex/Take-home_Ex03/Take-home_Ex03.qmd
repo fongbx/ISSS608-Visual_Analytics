@@ -23,7 +23,7 @@ For this exercise, we will be using the following packages:
 We will use `pacman::p_load` to install (if the packages are not yet installed) and load the packages into the R environment in a single command.
 
 ```{r}
-pacman::p_load(tidyverse, jsonlite, tidygraph, ggraph, visNetwork, igraph, plotly, RColorBrewer, graphlayouts, ggforce, tidytext)
+pacman::p_load(tidyverse, jsonlite, tidygraph, ggraph, visNetwork, igraph, plotly, RColorBrewer, graphlayouts, ggforce, tidytext, skimr, topicmodels)
 ```
 
 ## Import Data
@@ -38,27 +38,42 @@ mc3 <- fromJSON("data/MC3/MC3.json")
 
 ## Extracting all nodes
 
-The following code chunk is used to extract *nodes* data table from *mc3* list object and save the output in a tibble data frame object called *mc3_nodes_all*. Note that the format of *nodes* inside *mc3* is in list format and not in dataframe format, thus it is not sufficient that we convert the *nodes* to tibble format. We still need to perform additional wrangling below.
+The following code chunk is used to extract *nodes* data table from *mc3* list object and save the output in a tibble data frame object called *mc3_nodes*. Note that the format of *nodes* inside *mc3* is in list format and not in dataframe format, thus it is not sufficient that we convert the *nodes* to tibble format. We still need to perform additional wrangling below.
 
 ```{r}
 # extract all nodes
-mc3_nodes_all <- as_tibble(mc3$nodes) %>% 
+mc3_nodes <- as_tibble(mc3$nodes) %>% 
   mutate(country = as.character(country),
          id = as.character(id),
          product_services = as.character(product_services),
          revenue_omu = as.numeric(as.character(revenue_omu)),
-         type = as.character(type)) %>% 
-  select(id, country, type, revenue_omu, product_services) ## reorganise sequence
+         type = as.character(type)) %>%
+  select(id, country, type, revenue_omu, product_services)
 
-head(mc3_nodes_all)
+head(mc3_nodes)
+```
+
+::: callout-note
+## Things to learn from code
+
+-   `mutate()` and `as.character()` are used to convert the field data type from list to character.
+-   To convert *revenue_omu* from list data type to numeric data type, we need to convert the values into character first by using `as.character()`. Then, `as.numeric()` will be used to convert them into numeric data type.
+-   `select()` is used to re-organise the order of the fields.
+:::
+
+We will further examine the nodes below, particularly the *type* field, and we can see that there are three types of nodes.
+
+```{r}
+ggplot(data = mc3_nodes, aes(x = type)) +
+  geom_bar()
 ```
 
 ## Extracting all edges
 
-The following code chunk is used to extract *edges* data table from *mc3* list object and save the output in a tibble data frame object called *mc3_edges_all*.
+The following code chunk is used to extract *edges* data table from *mc3* list object and save the output in a tibble data frame object called *mc3_edges*.
 
 ```{r}
-mc3_edges_all <- as_tibble(mc3$links) %>% 
+mc3_edges <- as_tibble(mc3$links) %>% 
   distinct() %>% 
   mutate(source = as.character(source),
          target = as.character(target),
@@ -68,18 +83,171 @@ mc3_edges_all <- as_tibble(mc3$links) %>%
   filter(source != target) %>% 
   ungroup()
 
-head(mc3_edges_all)
+head(mc3_edges)
 ```
 
-### Text Sensing with Tidytext
+::: callout-note
+## Things to learn from code
+
+-   `distinct()` is used to ensure that there will be no duplicated records.
+-   `mutate()` and `as.character()` are used to convert the field data type from list to character.
+-   `group_by()` and `summarise()` are used to count the number of unique links.
+-   the `filter(source!=target)` is to ensure that no record with similar source and target.
+:::
+
+We will further examine the edges below, particularly the *type* field, and we can see that there are two types of edges.
 
 ```{r}
-tidynodes <- mc3_nodes_all %>% 
-  unnest_tokens(word, product_services,
-                to_lower = TRUE,
-                strip_punct = TRUE)
+ggplot(data = mc3_edges, aes(x = type)) +
+  geom_bar()
+```
 
-head(tidynodes)
+## Cleaning up duplicated nodes
+
+We note that there are over 2,000 rows of duplicated nodes.
+
+```{r}
+mc3_nodes[duplicated(mc3_nodes),]
+```
+
+The following code chunk is used to remove these duplicated nodes.
+
+```{r}
+mc3_nodes <- mc3_nodes %>%
+  arrange(id, country, type, desc(revenue_omu)) %>%
+  distinct(id, country, type, .keep_all = TRUE)
+```
+
+## Cleaning up product_services in nodes
+
+On close observation of *product_services*, we note that only nodes of *type* Company have meaningful *product_services* whereas the *type* Beneficial Owner and Company Contacts, most of the *product_services* are missing.
+
+```{r}
+# extract type Company
+company_nodes <- mc3_nodes %>% 
+  filter(type == "Company")
+
+# extract type Beneficial Owner
+bo_nodes <- mc3_nodes %>% 
+  filter(type == "Beneficial Owner")
+
+# extract type Company Contacts
+cc_nodes <- mc3_nodes %>% 
+  filter(type == "Company Contacts")
+```
+
+```{r}
+# bo nodes that have meaningful product_services
+bo_nodes_w_pdtsvcs <- bo_nodes %>% 
+  filter(product_services != 'character(0)')
+bo_nodes_w_pdtsvcs
+```
+
+```{r}
+# cc nodes that have meaningful product_services
+cc_nodes_w_pdtsvcs <- cc_nodes %>% 
+  filter(product_services != 'character(0)')
+cc_nodes_w_pdtsvcs
+```
+
+For this reason, we will only use the product_services column for nodes that are companies. We will be using [tidytext](https://juliasilge.github.io/tidytext/) to perform basic text sensing and clean up the product_services field in the nodes.
+
+### Tokenisation
+
+First, we will perform tokenisation of the words to break up the text into units called tokens. The function [`unnest_token()`](https://juliasilge.github.io/tidytext/reference/unnest_tokens.html) of tidytext is used to split text in *product_services* field into words.
+
+```{r}
+token_nodes <- company_nodes %>%
+  unnest_tokens(word, product_services) %>% 
+  select(id, word)
+
+head(token_nodes)
+```
+
+::: callout-note
+## Things to learn from code
+
+-   The two basic arguments to `unnest_tokens()` used here are the column names. First we have the output column name that will be created as the text is unnested into it (*word*, in this case), and then the input column that the text comes from (*product_services*, in this case).
+-   By default, punctuation has been stripped. (Use the *to_lower = FALSE* argument to turn off this behavior).
+-   By default, `unnest_tokens()` converts the tokens to lowercase, which makes them easier to compare or combine with other datasets. (Use the *to_lower = FALSE* argument to turn off this behavior).
+:::
+
+### Removing stopwords
+
+Next, we will remove stop words from the tokens using the [`stop_words`](https://juliasilge.github.io/tidytext/reference/stop_words.html) function in tidytext package.
+
+```{r}
+# add words to stop_words list
+# custom_stop_words <- bind_rows(tibble(word = c("0", "character", "related",
+#                                                "including", "offers"),
+#                                       lexicon = c("custom")),
+#                                stop_words)
+
+stopwords_removed <- token_nodes %>% 
+  anti_join(stop_words)
+
+stopwords_removed %>%
+  count(word, sort = TRUE) %>%
+  top_n(15) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(x = word, y = n)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip() +
+      labs(x = "Count",
+      y = "Unique words",
+      title = "Count of unique words found in product_services field")
+```
+
+::: callout-note
+## Things to learn from code
+
+There are two processes:
+
+-   Load the stop_words data included with tidytext. This data is simply a list of words that you may want to remove in a natural language analysis.
+-   Then `anti_join()` of dplyr package is used to remove all stop words from the analysis.
+:::
+
+```{r}
+entity_words <- stopwords_removed %>% 
+  group_by(id) %>% 
+  count(word, sort = TRUE)
+```
+
+```{r}
+entity_dtm <- entity_words %>% 
+  cast_dtm(id, word, n)
+```
+
+```{r}
+entity_lda <- LDA(entity_dtm, k = 10, control = list(seed = 3650))
+```
+
+```{r}
+entity_topics <- tidy(entity_lda, matrix = "beta")
+top_terms <- entity_topics %>%
+  group_by(topic) %>%
+  slice_max(beta, n = 10) %>% 
+  ungroup() %>%
+  arrange(topic, -beta)
+
+top_terms
+```
+
+```{r}
+entity_gamma <- tidy(entity_lda, matrix = "gamma")
+entity_gamma
+
+entity_classifications <- entity_gamma %>%
+  group_by(document) %>%
+  slice_max(gamma) %>%
+  ungroup()
+
+entity_classifications
+```
+
+```{r}
+unique(mc3_nodes$id)
 ```
 
 ## Approach
@@ -87,8 +255,14 @@ head(tidynodes)
 ### Data Preparation
 
 -   If you refer to product_services field on the nodes of the knowledge graph, you will notice that not all companies are involved in fisheries industry.  With reference to the information provided in product_services field, we can extract and classify the companies into different business groups.
+-   Duplicated company ids, even across the same type and across different types
+-   Products and services more meaningful for companies
 
 ### Analysis
 
 -   Find companies with many layers of beneficiaries (find high eigenvector or high degree centrality?)
 -   Find companies linked to companies from many different countries
+
+```{r}
+
+```
