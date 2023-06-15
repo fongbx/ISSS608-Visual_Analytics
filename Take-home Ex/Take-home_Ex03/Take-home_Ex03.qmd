@@ -19,11 +19,19 @@ We will focus on task 1 in the mini-challenge, which is to use visual analytics 
 For this exercise, we will be using the following packages:
 
 -   [**tidyverse**](https://www.tidyverse.org/#:~:text=The%20tidyverse%20is%20an%20opinionated,%2C%20grammar%2C%20and%20data%20structures.&text=See%20how%20the%20tidyverse%20makes,%E2%80%9CR%20for%20Data%20Science%E2%80%9D.) - a collection of packages for data science and analysis, including packages for data import, wrangling and visualisation
+-   [**jsonlite**](https://cran.r-project.org/web/packages/jsonlite/index.html) - for parsing json files from/to R objects
+-   [**tidygraph**](https://tidygraph.data-imaginist.com/)- for graph and network manipulation
+-   [**ggraph**](https://ggraph.data-imaginist.com/) - an extension of ggplot2 for supporting relational data structures such as networks, graphs and trees
+-   [**visNetwork**](https://datastorm-open.github.io/visNetwork/)- for interactive network visualisation
+-   [**igraph**](https://igraph.org/) - for creating and manipulating graphs and analysing networks
+-   [**RColorBrewer**](https://r-graph-gallery.com/38-rcolorbrewers-palettes.html) - offers colour palettes for R
+-   [**tidytext**](https://cran.r-project.org/web/packages/tidytext/vignettes/tidytext.html) - for text mining and analysis
+-   [**DT**](https://rstudio.github.io/DT/#:~:text=The%20R%20package%20DT%20provides,other%20features%20in%20the%20tables.) - for displaying tables in R with filtering, pagination and sorting features
 
 We will use `pacman::p_load` to install (if the packages are not yet installed) and load the packages into the R environment in a single command.
 
 ```{r}
-pacman::p_load(tidyverse, jsonlite, tidygraph, ggraph, visNetwork, igraph, plotly, RColorBrewer, graphlayouts, ggforce, tidytext, skimr, topicmodels)
+pacman::p_load(tidyverse, jsonlite, tidygraph, ggraph, visNetwork, igraph, RColorBrewer, tidytext, DT)
 ```
 
 ## Import Data
@@ -36,51 +44,20 @@ mc3 <- fromJSON("data/MC3/MC3.json")
 
 # Data Preparation
 
-## Extracting all nodes
-
-The following code chunk is used to extract *nodes* data table from *mc3* list object and save the output in a tibble data frame object called *mc3_nodes*. Note that the format of *nodes* inside *mc3* is in list format and not in dataframe format, thus it is not sufficient that we convert the *nodes* to tibble format. We still need to perform additional wrangling below.
-
-```{r}
-# extract all nodes
-mc3_nodes <- as_tibble(mc3$nodes) %>% 
-  mutate(country = as.character(country),
-         id = as.character(id),
-         product_services = as.character(product_services),
-         revenue_omu = as.numeric(as.character(revenue_omu)),
-         type = as.character(type)) %>%
-  select(id, country, type, revenue_omu, product_services)
-
-head(mc3_nodes)
-```
-
-::: callout-note
-## Things to learn from code
-
--   `mutate()` and `as.character()` are used to convert the field data type from list to character.
--   To convert *revenue_omu* from list data type to numeric data type, we need to convert the values into character first by using `as.character()`. Then, `as.numeric()` will be used to convert them into numeric data type.
--   `select()` is used to re-organise the order of the fields.
-:::
-
-We will further examine the nodes below, particularly the *type* field, and we can see that there are three types of nodes.
-
-```{r}
-ggplot(data = mc3_nodes, aes(x = type)) +
-  geom_bar()
-```
-
 ## Extracting all edges
 
-The following code chunk is used to extract *edges* data table from *mc3* list object and save the output in a tibble data frame object called *mc3_edges*.
+The following code chunk is used to extract *edges* data table from *mc3* list object and save the output in a tibble data frame object called *mc3_edges*. It is noted that some sources in the edges are a list of entities, hence we will use the function `unnest()` to change the list to multiple rows.
 
 ```{r}
 mc3_edges <- as_tibble(mc3$links) %>% 
+  unnest(source) %>% 
   distinct() %>% 
   mutate(source = as.character(source),
          target = as.character(target),
          type = as.character(type)) %>% 
   group_by(source, target, type) %>% 
   summarise(weights = n()) %>% 
-  filter(source != target) %>% 
+  filter(source != target) %>%
   ungroup()
 
 head(mc3_edges)
@@ -89,6 +66,7 @@ head(mc3_edges)
 ::: callout-note
 ## Things to learn from code
 
+-   `unnest()` is used to expand a list-column of data frames into rows
 -   `distinct()` is used to ensure that there will be no duplicated records.
 -   `mutate()` and `as.character()` are used to convert the field data type from list to character.
 -   `group_by()` and `summarise()` are used to count the number of unique links.
@@ -102,167 +80,566 @@ ggplot(data = mc3_edges, aes(x = type)) +
   geom_bar()
 ```
 
-## Cleaning up duplicated nodes
+## Extracting all nodes
 
-We note that there are over 2,000 rows of duplicated nodes.
+The following code chunk is used to extract *nodes* data table from *mc3* list object and save the output in a tibble data frame object called *mc3_nodes*. Note that the format of *nodes* inside *mc3* is in list format and not in dataframe format, thus it is not sufficient that we convert the *nodes* to tibble format. We still need to perform additional wrangling below.
+
+It is also noted that there are some nodes featured in the edges but not in the nodes from the *mc3* list object. For consistency, we will combine both sets of nodes to give the complete nodes df.
 
 ```{r}
-mc3_nodes[duplicated(mc3_nodes),]
+# extract all nodes from graph
+mc3_nodes <- as_tibble(mc3$nodes) %>% 
+  mutate(country = as.character(country),
+         id = as.character(id),
+         product_services = as.character(product_services),
+         revenue_omu = as.numeric(as.character(revenue_omu)),
+         type = as.character(type)) %>%
+  select(id, country, type, revenue_omu, product_services)
+
+# extract all nodes from edges
+id1 <- mc3_edges %>%
+  select(source, type) %>%
+  rename(id = source) %>% 
+  mutate(country = NA, revenue_omu = NA, product_services = NA) %>% 
+  select(id, country, type, revenue_omu, product_services)
+
+id2 <- mc3_edges %>%
+  select(target, type) %>%
+  rename(id = target) %>% 
+  mutate(country = NA, revenue_omu = NA, product_services = NA) %>% 
+  select(id, country, type, revenue_omu, product_services)
+
+additional_nodes <- rbind(id1, id2) %>% 
+  distinct %>% 
+  filter(!id %in% mc3_nodes[["id"]])
+
+# combine all nodes
+mc3_nodes_updated <- rbind(mc3_nodes, additional_nodes) %>%
+  distinct()
+
+head(mc3_nodes_updated)
 ```
 
-The following code chunk is used to remove these duplicated nodes.
+::: callout-note
+## Things to learn from code
+
+-   `mutate()` and `as.character()` are used to convert the field data type from list to character.
+-   To convert *revenue_omu* from list data type to numeric data type, we need to convert the values into character first by using `as.character()`. Then, `as.numeric()` will be used to convert them into numeric data type.
+-   For `rbind()`, we will require the same columns in the datasets, hence we use `mutate()` to add on NA columns.
+-   `select()` is used to re-organise the order of the fields.
+:::
+
+We will further examine the nodes below, particularly the *type* field, and we can see that there are three types of nodes.
 
 ```{r}
-mc3_nodes <- mc3_nodes %>%
+ggplot(data = mc3_nodes_updated, aes(x = type)) +
+  geom_bar()
+```
+
+## Cleaning up duplicated nodes
+
+We note that there are over 3,000 rows of duplicated nodes with the same id.
+
+```{r}
+mc3_nodes_updated[duplicated(mc3_nodes_updated$id),] %>% 
+  arrange(id)
+```
+
+The following code chunk is used to remove these duplicated nodes if the country and type are exactly the same.
+
+```{r}
+mc3_nodes_updated <- mc3_nodes_updated %>%
   arrange(id, country, type, desc(revenue_omu)) %>%
   distinct(id, country, type, .keep_all = TRUE)
 ```
 
+After removal of duplicated nodes, each id can still appear multiple times if they are tagged to multiple countries or if they are featured as multiple types of entities. We will hence aggregate all these rows together so that each id only appears once.
+
+```{r}
+mc3_nodes_master <- mc3_nodes_updated %>% 
+  group_by(id) %>% 
+  arrange(id, type, country) %>% 
+  summarise(countries = paste0(unique(country), collapse = ", "),
+            num_countries = n_distinct(country),
+            types = paste0(unique(type), collapse = ", "),
+            num_types = n_distinct(type),
+            revenue = sum(revenue_omu))
+```
+
 ## Cleaning up product_services in nodes
 
-On close observation of *product_services*, we note that only nodes of *type* Company have meaningful *product_services* whereas the *type* Beneficial Owner and Company Contacts, most of the *product_services* are missing.
+On close observation of *product_services*, we note that only nodes of *type* Company have meaningful *product_services* whereas for Beneficial Owner and Company Contacts, most of the *product_services* are missing. For this reason, we will only use the product_services column for nodes that are companies.
 
 ```{r}
 # extract type Company
-company_nodes <- mc3_nodes %>% 
+company_nodes <- mc3_nodes_updated %>% 
   filter(type == "Company")
 
 # extract type Beneficial Owner
-bo_nodes <- mc3_nodes %>% 
+bo_nodes <- mc3_nodes_updated %>% 
   filter(type == "Beneficial Owner")
 
 # extract type Company Contacts
-cc_nodes <- mc3_nodes %>% 
+cc_nodes <- mc3_nodes_updated %>% 
   filter(type == "Company Contacts")
-```
 
-```{r}
 # bo nodes that have meaningful product_services
 bo_nodes_w_pdtsvcs <- bo_nodes %>% 
-  filter(product_services != 'character(0)')
-bo_nodes_w_pdtsvcs
-```
+  filter(product_services != 'character(0)' & !is.na(product_services))
 
-```{r}
 # cc nodes that have meaningful product_services
 cc_nodes_w_pdtsvcs <- cc_nodes %>% 
-  filter(product_services != 'character(0)')
-cc_nodes_w_pdtsvcs
+  filter(product_services != 'character(0)' & !is.na(product_services))
+
+print(paste0("BO nodes with product_services not null: ", length(bo_nodes_w_pdtsvcs$id)))
+print(paste0("CC nodes with product_services not null: ", length(cc_nodes_w_pdtsvcs$id)))
 ```
 
-For this reason, we will only use the product_services column for nodes that are companies. We will be using [tidytext](https://juliasilge.github.io/tidytext/) to perform basic text sensing and clean up the product_services field in the nodes.
+### Simplifying product_services
 
-### Tokenisation
-
-First, we will perform tokenisation of the words to break up the text into units called tokens. The function [`unnest_token()`](https://juliasilge.github.io/tidytext/reference/unnest_tokens.html) of tidytext is used to split text in *product_services* field into words.
+As our priority are the fishing-related companies, we will categorise fishing-related companies, others and unknown. Our categorisation will be based on related keywords in the product_services column to its own category "Seafood Products".
 
 ```{r}
-token_nodes <- company_nodes %>%
-  unnest_tokens(word, product_services) %>% 
-  select(id, word)
-
-head(token_nodes)
-```
-
-::: callout-note
-## Things to learn from code
-
--   The two basic arguments to `unnest_tokens()` used here are the column names. First we have the output column name that will be created as the text is unnested into it (*word*, in this case), and then the input column that the text comes from (*product_services*, in this case).
--   By default, punctuation has been stripped. (Use the *to_lower = FALSE* argument to turn off this behavior).
--   By default, `unnest_tokens()` converts the tokens to lowercase, which makes them easier to compare or combine with other datasets. (Use the *to_lower = FALSE* argument to turn off this behavior).
-:::
-
-### Removing stopwords
-
-Next, we will remove stop words from the tokens using the [`stop_words`](https://juliasilge.github.io/tidytext/reference/stop_words.html) function in tidytext package.
-
-```{r}
-# add words to stop_words list
-# custom_stop_words <- bind_rows(tibble(word = c("0", "character", "related",
-#                                                "including", "offers"),
-#                                       lexicon = c("custom")),
-#                                stop_words)
-
-stopwords_removed <- token_nodes %>% 
-  anti_join(stop_words)
-
-stopwords_removed %>%
-  count(word, sort = TRUE) %>%
-  top_n(15) %>%
-  mutate(word = reorder(word, n)) %>%
-  ggplot(aes(x = word, y = n)) +
-  geom_col() +
-  xlab(NULL) +
-  coord_flip() +
-      labs(x = "Count",
-      y = "Unique words",
-      title = "Count of unique words found in product_services field")
-```
-
-::: callout-note
-## Things to learn from code
-
-There are two processes:
-
--   Load the stop_words data included with tidytext. This data is simply a list of words that you may want to remove in a natural language analysis.
--   Then `anti_join()` of dplyr package is used to remove all stop words from the analysis.
-:::
-
-```{r}
-entity_words <- stopwords_removed %>% 
+# simplify product_services
+company_nodes_cleaned <- company_nodes %>%
   group_by(id) %>% 
-  count(word, sort = TRUE)
+  summarise(product_services = paste0(unique(product_services), collapse = ", ")) %>% 
+  mutate(category = case_when(
+    str_detect(tolower(product_services), "fish|seafood|salmon|tuna|cod|fillet|fish|shrimp|squid") ~ "Seafood Products",
+    is.na(product_services) ~ "Unknown",
+    tolower(product_services) == "unknown" ~ "Unknown",
+    TRUE ~ "Others"))
+
+# combine cleaned product services back to mc3_master_nodes
+mc3_nodes_master_updated <- mc3_nodes_master %>%
+  left_join(company_nodes_cleaned, by = "id")
 ```
+
+# Data Visualisation
+
+In the following sections, we will attempt to identify anomolies in the business groups and visualise their network graph to understand further details.
+
+## Analysis of Node with Highest Betweenness Centrality
+
+First, we will identity the node with highest betweenness centrality in the entire network graph. A node with high betweenness centrality acts as a bridge between different parts of the graph. In our context, it may be indicative of an entity that is beneficial owner of many different companies or an entity that is used by ultimate beneficial owners to link to different groups of companies.
+
+The node with highest betweenness centrality in this case is identified to be **Wave Warriors S.A. de C.V. Express**. We will extract the first-degree and second-degree links to **Wave Warriors S.A. de C.V. Express** and visualise the interactive network chart below.
+
+::: callout-tip
+## Interactive Chart
+
+-   The darker orange node is our main node of interest, i.e., **Wave Warriors S.A. de C.V. Express**
+-   Select the id from drop-down or click on the interested entity on the network chart to view its first-degree linked nodes
+-   Select the group from drop-down to view specific types of nodes. The group refers to the types of roles that the node may play in the entire network chart, e.g., Beneficial Owner or others
+-   All nodes which play a role of Beneficial Owner in at least one of its relationships will be marked with a triangle shape. This makes it easier to identify multiple layers of beneficial owners where present.
+:::
 
 ```{r}
-entity_dtm <- entity_words %>% 
-  cast_dtm(id, word, n)
+#| code-fold: true
+#| code-summary: "Show code"
+#| fig-width: 14
+#| fig-height: 14
+
+# form graph
+mc3_graph <- tbl_graph(nodes = mc3_nodes_master_updated,
+                       edges = mc3_edges,
+                       directed = FALSE) %>% 
+  mutate(betweenness_centrality = centrality_betweenness())
+
+# extract node with highest betweenness centrality
+top1_betw <- mc3_graph %>% 
+  activate(nodes) %>% 
+  as_tibble() %>% 
+  top_n(1, betweenness_centrality) %>% 
+    select(id, countries, types)
+
+# extract lvl 1 edges
+top1_betw_edges_lvl1 <- mc3_edges %>% 
+  filter(source %in% top1_betw[["id"]] | target %in% top1_betw[["id"]])
+
+# extract nodes from lvl 1 edges
+id1 <- top1_betw_edges_lvl1 %>%
+  select(source) %>%
+  rename(id = source) %>% 
+  left_join(mc3_nodes_master_updated, by = "id") %>% 
+  select(id, countries, types)
+
+id2 <- top1_betw_edges_lvl1 %>%
+  select(target) %>%
+  rename(id = target) %>% 
+  left_join(mc3_nodes_master_updated, by = "id") %>% 
+  select(id, countries, types)
+
+additional_nodes_lvl1 <- rbind(id1, id2) %>% 
+  distinct %>% 
+  filter(!id %in% top1_betw[["id"]])
+
+# extract lvl 2 edges
+top1_betw_edges_lvl2 <- mc3_edges %>% 
+  filter(source %in% additional_nodes_lvl1[["id"]] | target %in% additional_nodes_lvl1[["id"]])
+
+# extract nodes from lvl 1 edges
+id1 <- top1_betw_edges_lvl2 %>%
+  select(source) %>%
+  rename(id = source) %>% 
+  left_join(mc3_nodes_master_updated, by = "id") %>% 
+  select(id, countries, types)
+
+id2 <- top1_betw_edges_lvl2 %>%
+  select(target) %>%
+  rename(id = target) %>% 
+  left_join(mc3_nodes_master_updated, by = "id") %>% 
+  select(id, countries, types)
+
+additional_nodes_lvl2 <- rbind(id1, id2) %>% 
+  distinct %>% 
+  filter(!id %in% top1_betw[["id"]] & !id %in% additional_nodes_lvl1[["id"]])
+
+# combine all nodes
+top1_betw_nodes <- rbind(top1_betw, additional_nodes_lvl1, additional_nodes_lvl2) %>%
+  distinct()
+
+# combine all edges
+top1_betw_edges <- rbind(top1_betw_edges_lvl1, top1_betw_edges_lvl2) %>% 
+  distinct()
+
+# colur palatte for betweenness centrality colours
+sw_colors <- colorRampPalette(brewer.pal(3, "RdBu"))(3)
+
+# customise edges for plotting
+top1_betw_edges <- top1_betw_edges %>% 
+  rename(from = source,
+         to = target) %>% 
+  mutate(title = paste0("Type: ", type), # tooltip when hover over
+         color = "#0085AF") # color of edge
+
+# customise nodes for plotting
+top1_betw_nodes <- top1_betw_nodes %>% 
+  rename(group = types) %>% 
+  mutate(id.type = ifelse(id == top1_betw[["id"]], sw_colors[1], sw_colors[2])) %>%
+  mutate(title = paste0(id, "<br>Group: ", group), # tooltip when hover over
+         size = 30, # set size of nodes
+         color.border = "#013848", # border colour of nodes
+         color.background = id.type, # background colour of nodes
+         color.highlight.background = "#FF8000" # background colour of nodes when highlighted
+         )
+
+# plot graph
+visNetwork(top1_betw_nodes, top1_betw_edges,
+           height = "500px", width = "100%",
+           main = paste0("Network Graph of ", top1_betw[["id"]])) %>%
+  visIgraphLayout() %>%
+  visGroups(groupname = "Beneficial Owner", shape = "triangle") %>%
+  visGroups(groupname = "Beneficial Owner, Company Contacts", shape = "triangle") %>%
+  visOptions(selectedBy = "group",
+             highlightNearest = list(enabled = T, degree = 1, hover = T),
+             nodesIdSelection = TRUE) %>% 
+  visLayout(randomSeed = 123)
 ```
+
+::: callout-note
+## Key Observations
+
+**Wave Warriors S.A. de C.V.** is a company node owned by many beneficial owners. There are also some cases where there are multiple layers of ownership. For example, we can see that **Matthew Williams** is a beneficial owner of **Wave Warriors S.A. de C.V.** and **Cole-Crosby** in turn is a beneficial owner of **Matthew Williams** (or his shareholdings).
+
+Such behaviour of ownership layering is an anomaly as it could potentially be an attempt to obscure the ownership structure and make it challenging to trace the true ownership.
+:::
+
+## Analysis of Largest Connected Components
+
+Next, we will perform an analysis on some of the largest connected components in the network chart. These large connected components can potentially reveal big groups of connected companies and beneficial owners. By identifying the nodes with the highest betweenness centrality in these components, we hope to be able to identify beneficial owners that are connected to many companies, which may be an anomaly or cause of concern. This is because when a beneficial owner controls multiple companies, it adds layers of complexity and obscurity to the ownership structure. Owning multiple companies can also provide a means to conceal illegal activities by interconnecting the companies or transferring funds or assets among the companies.
+
+We will break up the network graph into connected components using the function [`components()`](https://search.r-project.org/CRAN/refmans/igraph/html/components.html) and find the three clusters that are largest in size.
 
 ```{r}
-entity_lda <- LDA(entity_dtm, k = 10, control = list(seed = 3650))
+#| code-fold: true
+#| code-summary: "Show code"
+#| fig-width: 14
+#| fig-height: 14
+# form graph
+mc3_graph <- tbl_graph(nodes = mc3_nodes_master_updated,
+                       edges = mc3_edges,
+                       directed = FALSE)
+
+# find components in graph
+set.seed(123)
+clusters <- components(mc3_graph)
+
+# update graph with component membership
+mc3_nodes_master_updated <- mc3_nodes_master_updated %>% 
+  mutate(component_membership = clusters$membership)
+
+# extract info relating to components
+component_df <- clusters$csize %>% 
+  as_tibble() %>% 
+  rownames_to_column() %>% 
+  rename(component_membership = rowname,
+         component_size = value)
+
+# find components that are top 3 in size    
+top_3_components <- component_df %>% 
+  top_n(3, component_size) %>% 
+  arrange(desc(component_size))
+
+datatable(top_3_components)
 ```
+
+Next, we will visualise the network charts of the three largest clusters separately using interactive charts below.
+
+::: callout-tip
+## Interactive Chart
+
+-   The darker orange nodes are the nodes with betweenness centrality above the 90th percentile in the network chart.
+-   Select the id from drop-down or click on the interested entity on the network chart to view its first-degree linked nodes
+-   Select the group from drop-down to view specific types of nodes. The group refers to the types of roles that the node may play in the entire network chart, e.g., Beneficial Owner or others
+-   All nodes which play a role of Beneficial Owner in at least one of its relationships will be marked with a triangle shape. This makes it easier to identify multiple layers of beneficial owners where present.
+:::
 
 ```{r}
-entity_topics <- tidy(entity_lda, matrix = "beta")
-top_terms <- entity_topics %>%
-  group_by(topic) %>%
-  slice_max(beta, n = 10) %>% 
-  ungroup() %>%
-  arrange(topic, -beta)
+#| code-fold: true
+#| code-summary: "Show code"
+#| fig-width: 14
+#| fig-height: 14
+visualise_cluster <- function(x){
+  
+# extract nodes in component
+component_nodes <- mc3_nodes_master_updated %>%
+  filter(component_membership == x)
 
-top_terms
+# extract edges in component
+component_edges <- mc3_edges %>% 
+  filter(source %in% component_nodes[["id"]] | target %in% component_nodes[["id"]])
+
+# compute centrality measures
+component_graph <- tbl_graph(nodes = component_nodes,
+                             edges = component_edges,
+                             directed = FALSE) %>% 
+  mutate(closeness_centrality = centrality_closeness(),
+         betweenness_centrality = centrality_betweenness(),
+         eigen_cetrality = centrality_eigen())
+
+# compute the top 90th percentile centrality
+component_nodes_updated <- component_graph %>% 
+  activate(nodes) %>% 
+  as_tibble()
+
+cent_per_90 <- quantile(component_nodes_updated$betweenness_centrality,
+                               probs = 0.90)
+
+component_nodes_updated <- component_nodes_updated %>% 
+  mutate(is_top_cent_90 = ifelse(betweenness_centrality >= cent_per_90, "yes", "no"))
+
+# colur palatte for betweenness centrality colours
+sw_colors <- colorRampPalette(brewer.pal(3, "RdBu"))(3)
+
+# customise edges for plotting
+component_edges <- component_edges %>% 
+  rename(from = source,
+         to = target) %>% 
+  mutate(title = paste0("Type: ", type), # tooltip when hover over
+         color = "#0085AF") # color of edge
+
+# customise nodes for plotting
+component_nodes_updated <- component_nodes_updated %>% 
+  rename(group = types) %>% 
+  mutate(is_top_cent_90.type = ifelse(is_top_cent_90 == "yes", sw_colors[1], sw_colors[2])) %>% 
+  mutate(title = paste0(id, "<br>Group: ", group), # tooltip when hover over
+         size = 40, # set size of nodes
+         color.border = "#013848", # border colour of nodes
+         color.background = is_top_cent_90.type, # background colour of nodes
+         color.highlight.background = "#FF8000" # background colour of nodes when highlighted
+         )
+
+# plot graph
+visNetwork(component_nodes_updated, component_edges,
+           height = "500px", width = "100%",
+           main = paste0("Entities in Component ", x)) %>%
+  visIgraphLayout() %>%
+  visGroups(groupname = "Beneficial Owner", shape = "triangle") %>%
+  visGroups(groupname = "Beneficial Owner, Company Contacts", shape = "triangle") %>%
+  visGroups(groupname = "Beneficial Owner, Company", shape = "triangle") %>%
+  visGroups(groupname = "Beneficial Owner, Company, Company Contacts", shape = "triangle") %>%
+  visOptions(selectedBy = "group",
+             highlightNearest = list(enabled = T, degree = 1, hover = T),
+             nodesIdSelection = TRUE) %>% 
+  visLayout(randomSeed = 123)
+
+}
+
+visualise_cluster(1)
 ```
+
+::: callout-note
+## Key Observations
+
+This is a very large cluster with 7,093 nodes. From the network chart, we can see that the nodes are quite dispersed and there is no high density in any particular areas. As such, it is more difficult to single out certain nodes for observation. For further exploration, we can start with the darker orange nodes with betweenness centrality above the 90th percentile and find out anomalies from there.
+:::
 
 ```{r}
-entity_gamma <- tidy(entity_lda, matrix = "gamma")
-entity_gamma
-
-entity_classifications <- entity_gamma %>%
-  group_by(document) %>%
-  slice_max(gamma) %>%
-  ungroup()
-
-entity_classifications
+#| code-fold: true
+#| code-summary: "Show code"
+#| fig-width: 14
+#| fig-height: 14
+visualise_cluster(204)
 ```
+
+::: callout-note
+## Key Observations
+
+This is the second largest cluster with 140 nodes. From this chart, we can identify some of the entities with high betweenness centrality as beneficial owners of many companies. For example, from the chart, we observe that **Mary Miller** is the beneficial owner of three entities, including **Andhra Pradesh Sp Worldwide**, **Henties Bay Ltd. Corporation**, **Mar del Este SE. Patterson**, **Fowler and Nicholson** on the other hand is linked to **Mary Miller** as Beneficial Owner, which could indicate that **Patterson**, **Fowler and Nicholson** is the ultimate beneficial owner of the three entities mentioned.
+
+Such behaviour of ownership layering is an anomaly as it could potentially be an attempt to obscure the ownership structure and make it challenging to trace the true ownership.
+:::
 
 ```{r}
-unique(mc3_nodes$id)
+#| code-fold: true
+#| code-summary: "Show code"
+#| fig-width: 14
+#| fig-height: 14
+visualise_cluster(561)
 ```
 
-## Approach
+::: callout-note
+## Key Observations
 
-### Data Preparation
+This is the third largest cluster with 136 nodes. Similarly from this chart, we can identify some of the entities with high betweenness centrality as beneficial owners of many companies. For example, from the chart, we observe that **Jennifer Hill** is very well-connected, being the beneficial owner of two entities, including **Brisa del Mar GmbH** and **Mar de Cristal S.A. de C.V.** and the company contact of two entities, including **Coral Azul S.A. de C.V.** and **Branded tilapia Corporation Holdings**. This is potentially an anomaly as she holds control and influence over multiple companies and could potentially make use of the companies to engage in and conceal illegal activities.
+:::
 
--   If you refer to product_services field on the nodes of the knowledge graph, you will notice that not all companies are involved in fisheries industry.  With reference to the information provided in product_services field, we can extract and classify the companies into different business groups.
--   Duplicated company ids, even across the same type and across different types
--   Products and services more meaningful for companies
+## Analysis of companies registered to many countries
 
-### Analysis
+Another anomaly is that we can look out for companies that are tied to or registered in many countries. This is an anomaly and risk because it canbe indicative of an attempt to take advantage of the regulatory systems in different jurisdictions to exploit loopholes or evade regulatory scrutiny. By frequently changing jurisdictions, the company may also make it more difficult for authorities to track its operations, identify connections to other entities, or scrutinise its financial transactions. It raises suspicions of trying to hide illicit activities or create a complex web of corporate structure.
 
--   Find companies with many layers of beneficiaries (find high eigenvector or high degree centrality?)
--   Find companies linked to companies from many different countries
+We will view the top 3 companies that are linked to the most countries below. Specifically, the top company, **Aqua Aura SE Marine life** is found to be linked to nine countries, which is quite an anomaly. Coincidentally, **Aqua Aura SE Marine life** also falls under Cluster 1 that was the biggest connected component visualised above.
 
 ```{r}
+#| code-fold: true
+#| code-summary: "Show code"
+#| fig-width: 14
+#| fig-height: 14
+# extract node with most number of countries
+top3_countries <- mc3_nodes_master_updated %>% 
+  arrange(desc(num_countries)) %>% 
+  top_n(3, num_countries) %>% 
+  select(id, countries, types)
 
+datatable(top3_countries)
 ```
+
+We will further extract the first-degree and second-degree links of **Aqua Aura SE Marine life** for easier visualisation below.
+
+::: callout-tip
+## Interactive Chart
+
+-   The darker orange node is our main node of interest, i.e., **Aqua Aura SE Marine life**
+-   Select the id from drop-down or click on the interested entity on the network chart to view its first-degree linked nodes
+-   Select the group from drop-down to view specific types of nodes. The group refers to the types of roles that the node may play in the entire network chart, e.g., Beneficial Owner or others
+-   All nodes which play a role of Beneficial Owner in at least one of its relationships will be marked with a triangle shape. This makes it easier to identify multiple layers of beneficial owners where present.
+:::
+
+```{r}
+#| code-fold: true
+#| code-summary: "Show code"
+#| fig-width: 14
+#| fig-height: 14
+# extract node with most number of countries
+top1_countries <- mc3_nodes_master_updated %>% 
+  arrange(desc(num_countries)) %>% 
+  top_n(1, num_countries) %>% 
+  select(id, countries, types)
+
+# extract lvl 1 edges
+top1_countries_edges_lvl1 <- mc3_edges %>% 
+  filter(source %in% top1_countries[["id"]] | target %in% top1_countries[["id"]])
+
+# extract nodes from lvl 1 edges
+id1 <- top1_countries_edges_lvl1 %>%
+  select(source) %>%
+  rename(id = source) %>% 
+  left_join(mc3_nodes_master_updated, by = "id") %>% 
+  select(id, countries, types)
+
+id2 <- top1_countries_edges_lvl1 %>%
+  select(target) %>%
+  rename(id = target) %>% 
+  left_join(mc3_nodes_master_updated, by = "id") %>% 
+  select(id, countries, types)
+
+additional_nodes_lvl1 <- rbind(id1, id2) %>% 
+  distinct %>% 
+  filter(!id %in% top1_countries[["id"]])
+
+# extract lvl 2 edges
+top1_countries_edges_lvl2 <- mc3_edges %>% 
+  filter(source %in% additional_nodes_lvl1[["id"]] | target %in% additional_nodes_lvl1[["id"]])
+
+# extract nodes from lvl 1 edges
+id1 <- top1_countries_edges_lvl2 %>%
+  select(source) %>%
+  rename(id = source) %>% 
+  left_join(mc3_nodes_master_updated, by = "id") %>% 
+  select(id, countries, types)
+
+id2 <- top1_countries_edges_lvl2 %>%
+  select(target) %>%
+  rename(id = target) %>% 
+  left_join(mc3_nodes_master_updated, by = "id") %>% 
+  select(id, countries, types)
+
+additional_nodes_lvl2 <- rbind(id1, id2) %>% 
+  distinct %>% 
+  filter(!id %in% top1_countries[["id"]] & !id %in% additional_nodes_lvl1[["id"]])
+
+# combine all nodes
+top1_countries_nodes <- rbind(top1_countries, additional_nodes_lvl1, additional_nodes_lvl2) %>%
+  distinct()
+
+# combine all edges
+top1_countries_edges <- rbind(top1_countries_edges_lvl1, top1_countries_edges_lvl2) %>% 
+  distinct()
+
+# colur palatte for betweenness centrality colours
+sw_colors <- colorRampPalette(brewer.pal(3, "RdBu"))(3)
+
+# customise edges for plotting
+top1_countries_edges <- top1_countries_edges %>% 
+  rename(from = source,
+         to = target) %>% 
+  mutate(title = paste0("Type: ", type), # tooltip when hover over
+         color = "#0085AF") # color of edge
+
+# customise nodes for plotting
+top1_countries_nodes <- top1_countries_nodes %>% 
+  rename(group = types) %>% 
+  mutate(id.type = ifelse(id == top1_countries[["id"]], sw_colors[1], sw_colors[2])) %>% 
+  mutate(title = paste0(id, "<br>Group: ", group), # tooltip when hover over
+         size = 30, # set size of nodes
+         color.border = "#013848", # border colour of nodes
+         color.background = id.type, # background colour of nodes
+         color.highlight.background = "#FF8000" # background colour of nodes when highlighted
+         )
+
+# plot graph
+visNetwork(top1_countries_nodes, top1_countries_edges,
+           height = "500px", width = "100%",
+           main = paste0("Network Graph of ", top1_countries[["id"]])) %>%
+  visIgraphLayout() %>%
+  visGroups(groupname = "Beneficial Owner", shape = "triangle") %>%
+  visGroups(groupname = "Beneficial Owner, Company Contacts", shape = "triangle") %>%
+  visOptions(selectedBy = "group",
+             highlightNearest = list(enabled = T, degree = 1, hover = T),
+             nodesIdSelection = TRUE) %>% 
+  visLayout(randomSeed = 123)
+```
+
+::: callout-note
+## Key Observations
+
+**Aqua Aura SE Marine life** is a company node owned by many beneficial owners. There are some cases where there are multiple layers of ownership. For example, we can see that **Michael Bell** is a beneficial owner of **Aqua Aura SE Marine life** and **Dean-Fisher** in turn is a beneficial owner of **Michael Bell** (or his shareholdings).
+
+Such behaviour of ownership layering is an anomaly as it could potentially be an attempt to obscure the ownership structure and make it challenging to trace the true ownership.
+:::
+
+# References
+
+-   [Modelling, Visualising and Analysing Network Data with R](https://r4va.netlify.app/chap27.html)
+-   [Network Visualisation in R](https://jtr13.github.io/cc21fall2/network-visualization-in-r.html)
